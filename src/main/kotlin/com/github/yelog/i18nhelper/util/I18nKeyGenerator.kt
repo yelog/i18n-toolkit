@@ -2,6 +2,8 @@ package com.github.yelog.i18nhelper.util
 
 import com.intellij.openapi.vfs.VirtualFile
 
+
+
 object I18nKeyGenerator {
 
     data class PathInfo(
@@ -91,7 +93,11 @@ object I18nKeyGenerator {
 
         return when {
             afterLocaleParts.isEmpty() -> {
-                LocaleModuleInfo(locale = fileName, module = null)
+                if (isLocale(fileName)) {
+                    LocaleModuleInfo(locale = fileName, module = null)
+                } else {
+                    LocaleModuleInfo(locale = "unknown", module = fileName)
+                }
             }
             afterLocaleParts.size == 1 && isLocale(afterLocaleParts[0]) -> {
                 LocaleModuleInfo(locale = afterLocaleParts[0], module = fileName)
@@ -100,7 +106,8 @@ object I18nKeyGenerator {
                 LocaleModuleInfo(locale = fileName, module = null)
             }
             afterLocaleParts.size >= 1 -> {
-                val locale = afterLocaleParts.find { isLocale(it) } ?: fileName
+                val locale = afterLocaleParts.find { isLocale(it) }
+                    ?: if (isLocale(fileName)) fileName else "unknown"
                 val module = if (isLocale(fileName)) null else fileName
                 LocaleModuleInfo(locale = locale, module = module)
             }
@@ -117,21 +124,7 @@ object I18nKeyGenerator {
         return if (isLocale(fileName)) fileName else "unknown"
     }
 
-    private fun isLocale(name: String): Boolean {
-        val localePatterns = listOf(
-            Regex("^[a-z]{2}$"),
-            Regex("^[a-z]{2}[_-][A-Z]{2}$"),
-            Regex("^[a-z]{2}[_-][a-z]{2}$"),
-            Regex("^zh[_-]CN$", RegexOption.IGNORE_CASE),
-            Regex("^zh[_-]TW$", RegexOption.IGNORE_CASE),
-            Regex("^zh[_-]HK$", RegexOption.IGNORE_CASE),
-            Regex("^en[_-]US$", RegexOption.IGNORE_CASE),
-            Regex("^en[_-]GB$", RegexOption.IGNORE_CASE),
-            Regex("^ja[_-]JP$", RegexOption.IGNORE_CASE),
-            Regex("^ko[_-]KR$", RegexOption.IGNORE_CASE)
-        )
-        return localePatterns.any { it.matches(name) }
-    }
+    private fun isLocale(name: String): Boolean = I18nLocaleUtils.isLocaleName(name)
 
     fun buildFullKey(prefix: String, key: String): String {
         return if (prefix.isEmpty()) key else "$prefix$key"

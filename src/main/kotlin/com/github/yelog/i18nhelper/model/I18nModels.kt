@@ -3,14 +3,14 @@ package com.github.yelog.i18nhelper.model
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
 
-enum class I18nFramework(val packageNames: List<String>) {
-    VUE_I18N(listOf("vue-i18n")),
-    REACT_I18NEXT(listOf("react-i18next", "i18next")),
-    I18NEXT(listOf("i18next")),
-    NEXT_INTL(listOf("next-intl")),
-    NUXT_I18N(listOf("@nuxtjs/i18n")),
-    REACT_INTL(listOf("react-intl")),
-    UNKNOWN(emptyList());
+enum class I18nFramework(val displayName: String, val packageNames: List<String>) {
+    VUE_I18N("vue-i18n", listOf("vue-i18n")),
+    REACT_I18NEXT("react-i18next", listOf("react-i18next", "i18next")),
+    I18NEXT("i18next", listOf("i18next")),
+    NEXT_INTL("next-intl", listOf("next-intl")),
+    NUXT_I18N("@nuxtjs/i18n", listOf("@nuxtjs/i18n")),
+    REACT_INTL("react-intl", listOf("react-intl")),
+    UNKNOWN("unknown", emptyList());
 
     companion object {
         fun fromPackageName(name: String): I18nFramework {

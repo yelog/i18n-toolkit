@@ -5,6 +5,7 @@ import com.github.yelog.i18nhelper.model.*
 import com.github.yelog.i18nhelper.parser.TranslationFileParser
 import com.github.yelog.i18nhelper.scanner.I18nDirectoryScanner
 import com.github.yelog.i18nhelper.util.I18nKeyGenerator
+import com.github.yelog.i18nhelper.util.I18nLocaleUtils
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -70,7 +71,15 @@ class I18nCacheService(private val project: Project) : Disposable {
     }
 
     fun getTranslation(key: String, locale: String? = null): TranslationEntry? {
-        return translationData?.getTranslation(key, locale)
+        val data = translationData ?: return null
+        if (locale == null) return data.getTranslation(key, null)
+
+        val candidates = I18nLocaleUtils.buildLocaleCandidates(locale)
+        for (candidate in candidates) {
+            data.getTranslation(key, candidate)?.let { return it }
+        }
+
+        return data.getTranslation(key, null)
     }
 
     fun getAllTranslations(key: String): Map<String, TranslationEntry> {
@@ -79,6 +88,16 @@ class I18nCacheService(private val project: Project) : Disposable {
 
     fun getAllKeys(): Set<String> {
         return translationData?.translations?.keys ?: emptySet()
+    }
+
+    fun getAvailableLocales(): List<String> {
+        return translationData?.files
+            ?.map { it.locale }
+            ?.filter { I18nLocaleUtils.isLocaleName(it) }
+            ?.map { I18nLocaleUtils.normalizeLocale(it) }
+            ?.distinct()
+            ?.sorted()
+            ?: emptyList()
     }
 
     fun getEntriesForKey(key: String): Set<TranslationEntry> {

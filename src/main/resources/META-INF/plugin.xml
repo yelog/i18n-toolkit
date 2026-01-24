@@ -58,8 +58,29 @@
                                         implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="TypeScript"
                                         implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+
+        <lang.foldingBuilder language="JavaScript"
+                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+        <lang.foldingBuilder language="TypeScript"
+                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+        <lang.foldingBuilder language="Vue"
+                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+        <lang.foldingBuilder language="TypeScript JSX"
+                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+
+        <projectConfigurable id="i18n.helper.settings"
+                             displayName="I18n Helper"
+                             instance="com.github.yelog.i18nhelper.settings.I18nSettingsConfigurable"
+                             nonDefaultProject="true"/>
         
         <!-- File listener for cache invalidation -->
         <vfs.asyncListener implementation="com.github.yelog.i18nhelper.listener.I18nFileListener"/>
     </extensions>
+
+    <actions>
+        <action id="I18nHelper.SwitchLocale"
+                class="com.github.yelog.i18nhelper.action.I18nSwitchLocaleAction"
+                text="Switch I18n Display Language"
+                description="Cycle i18n display language"/>
+    </actions>
 </idea-plugin>

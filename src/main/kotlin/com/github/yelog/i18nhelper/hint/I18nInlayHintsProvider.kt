@@ -1,6 +1,8 @@
 package com.github.yelog.i18nhelper.hint
 
 import com.github.yelog.i18nhelper.service.I18nCacheService
+import com.github.yelog.i18nhelper.settings.I18nDisplayMode
+import com.github.yelog.i18nhelper.settings.I18nSettingsState
 import com.intellij.codeInsight.hints.*
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
 import com.intellij.codeInsight.hints.presentation.PresentationFactory
@@ -8,8 +10,9 @@ import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.openapi.editor.Editor
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.lang.injection.InjectedLanguageManager
+import com.intellij.psi.PsiElement
 import java.util.concurrent.ConcurrentHashMap
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -20,7 +23,7 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
     companion object {
         private val fileProcessedOffsets = ConcurrentHashMap<String, MutableSet<Int>>()
         private val fileTimestamps = ConcurrentHashMap<String, Long>()
-        
+
         fun getOrCreateOffsetSet(filePath: String, documentTimestamp: Long): MutableSet<Int> {
             val lastTimestamp = fileTimestamps[filePath]
             if (lastTimestamp != documentTimestamp) {
@@ -28,6 +31,11 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
                 fileTimestamps[filePath] = documentTimestamp
             }
             return fileProcessedOffsets.getOrPut(filePath) { ConcurrentHashMap.newKeySet() }
+        }
+
+        fun clearCache() {
+            fileProcessedOffsets.clear()
+            fileTimestamps.clear()
         }
     }
 
@@ -76,7 +84,7 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             if (args.isEmpty()) return true
 
             val firstArg = args[0]
-            val offset = firstArg.textRange.endOffset
+            val offset = getHostOffset(firstArg, firstArg.textRange.endOffset)
 
             val key = when (firstArg) {
                 is JSLiteralExpression -> firstArg.stringValue
@@ -85,7 +93,11 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
 
             val project = element.project
             val cacheService = I18nCacheService.getInstance(project)
-            val translation = cacheService.getTranslation(key) ?: return true
+            val settings = I18nSettingsState.getInstance(project)
+            if (settings.state.displayMode == I18nDisplayMode.TRANSLATION_ONLY) return true
+
+            val locale = settings.getDisplayLocaleOrNull()
+            val translation = cacheService.getTranslation(key, locale) ?: return true
 
             val processedOffsets = getOrCreateOffsetSet(filePath, documentTimestamp)
             if (!processedOffsets.add(offset)) return true
@@ -101,6 +113,16 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             )
 
             return true
+        }
+
+        private fun getHostOffset(element: PsiElement, injectedOffset: Int): Int {
+            val file = element.containingFile
+            val manager = InjectedLanguageManager.getInstance(element.project)
+            return if (manager.isInjectedFragment(file)) {
+                manager.injectedToHost(file, injectedOffset)
+            } else {
+                injectedOffset
+            }
         }
 
         private fun createPresentation(factory: PresentationFactory, text: String): InlayPresentation {

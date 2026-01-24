@@ -2,6 +2,7 @@ package com.github.yelog.i18nhelper.scanner
 
 import com.github.yelog.i18nhelper.model.I18nDirectories
 import com.github.yelog.i18nhelper.model.TranslationFileType
+import com.github.yelog.i18nhelper.util.I18nLocaleUtils
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.vfs.VirtualFile
@@ -83,19 +84,5 @@ object I18nDirectoryScanner {
         return "unknown"
     }
 
-    private fun isLocaleName(name: String): Boolean {
-        val localePatterns = listOf(
-            Regex("^[a-z]{2}$"),
-            Regex("^[a-z]{2}[_-][A-Z]{2}$"),
-            Regex("^[a-z]{2}[_-][a-z]{2}$"),
-            Regex("^zh[_-]CN$", RegexOption.IGNORE_CASE),
-            Regex("^zh[_-]TW$", RegexOption.IGNORE_CASE),
-            Regex("^zh[_-]HK$", RegexOption.IGNORE_CASE),
-            Regex("^en[_-]US$", RegexOption.IGNORE_CASE),
-            Regex("^en[_-]GB$", RegexOption.IGNORE_CASE),
-            Regex("^ja[_-]JP$", RegexOption.IGNORE_CASE),
-            Regex("^ko[_-]KR$", RegexOption.IGNORE_CASE)
-        )
-        return localePatterns.any { it.matches(name) }
-    }
+    private fun isLocaleName(name: String): Boolean = I18nLocaleUtils.isLocaleName(name)
 }
