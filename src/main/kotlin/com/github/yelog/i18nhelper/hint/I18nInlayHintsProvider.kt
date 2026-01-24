@@ -10,12 +10,26 @@ import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.intellij.psi.util.PsiTreeUtil
+import java.util.concurrent.ConcurrentHashMap
 import javax.swing.JComponent
 import javax.swing.JPanel
 
 @Suppress("UnstableApiUsage")
 class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
+
+    companion object {
+        private val fileProcessedOffsets = ConcurrentHashMap<String, MutableSet<Int>>()
+        private val fileTimestamps = ConcurrentHashMap<String, Long>()
+        
+        fun getOrCreateOffsetSet(filePath: String, documentTimestamp: Long): MutableSet<Int> {
+            val lastTimestamp = fileTimestamps[filePath]
+            if (lastTimestamp != documentTimestamp) {
+                fileProcessedOffsets[filePath] = ConcurrentHashMap.newKeySet()
+                fileTimestamps[filePath] = documentTimestamp
+            }
+            return fileProcessedOffsets.getOrPut(filePath) { ConcurrentHashMap.newKeySet() }
+        }
+    }
 
     override val key: SettingsKey<NoSettings> = SettingsKey("i18n.inlay.hints")
     override val name: String = "I18n Translation Hints"
@@ -35,10 +49,18 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
         settings: NoSettings,
         sink: InlayHintsSink
     ): InlayHintsCollector {
-        return I18nInlayHintsCollector(editor)
+        val filePath = file.originalFile.virtualFile?.path
+            ?: file.virtualFile?.path
+            ?: file.name
+        val timestamp = editor.document.modificationStamp
+        return I18nInlayHintsCollector(editor, filePath, timestamp)
     }
 
-    private class I18nInlayHintsCollector(editor: Editor) : FactoryInlayHintsCollector(editor) {
+    private class I18nInlayHintsCollector(
+        editor: Editor,
+        private val filePath: String,
+        private val documentTimestamp: Long
+    ) : FactoryInlayHintsCollector(editor) {
 
         private val i18nFunctions = setOf("t", "\$t", "i18n", "i18next", "translate", "formatMessage")
 
@@ -54,6 +76,8 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             if (args.isEmpty()) return true
 
             val firstArg = args[0]
+            val offset = firstArg.textRange.endOffset
+
             val key = when (firstArg) {
                 is JSLiteralExpression -> firstArg.stringValue
                 else -> null
@@ -63,11 +87,14 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             val cacheService = I18nCacheService.getInstance(project)
             val translation = cacheService.getTranslation(key) ?: return true
 
+            val processedOffsets = getOrCreateOffsetSet(filePath, documentTimestamp)
+            if (!processedOffsets.add(offset)) return true
+
             val translationText = truncateText(translation.value, 50)
             val presentation = createPresentation(factory, translationText)
 
             sink.addInlineElement(
-                firstArg.textRange.endOffset,
+                offset,
                 true,
                 presentation,
                 false
