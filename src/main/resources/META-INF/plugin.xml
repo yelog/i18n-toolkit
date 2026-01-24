@@ -1,15 +1,65 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
     <id>com.github.yelog.i18nhelper</id>
-    <name>i18n-helper</name>
-    <vendor>yelog</vendor>
+    <name>I18n Helper</name>
+    <vendor url="https://github.com/yelog">yelog</vendor>
+
+    <description><![CDATA[
+    Intelligent i18n (internationalization) helper for JavaScript/TypeScript projects.
+    <br><br>
+    Features:
+    <ul>
+        <li>Auto-detect i18n frameworks: vue-i18n, react-i18next, i18next, next-intl, @nuxtjs/i18n, react-intl</li>
+        <li>Inline translation preview at t() / $t() calls</li>
+        <li>Cmd+Click navigation to translation files</li>
+        <li>Find Usages for translation keys</li>
+        <li>Cross-language navigation between locale files</li>
+    </ul>
+    ]]></description>
 
     <depends>com.intellij.modules.platform</depends>
+    <depends>JavaScript</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.I18nBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.github.yelog.i18nhelper.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="com.github.yelog.i18nhelper.startup.MyProjectActivity" />
+        <!-- Project Service for caching translations -->
+        <projectService serviceImplementation="com.github.yelog.i18nhelper.service.I18nCacheService"/>
+        
+        <!-- Startup activity to initialize cache -->
+        <postStartupActivity implementation="com.github.yelog.i18nhelper.startup.I18nProjectActivity"/>
+        
+        <!-- Inlay hints for showing translations inline -->
+        <codeInsight.inlayProvider language="JavaScript"
+                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+        <codeInsight.inlayProvider language="TypeScript"
+                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+        <codeInsight.inlayProvider language="Vue"
+                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+        <codeInsight.inlayProvider language="TypeScript JSX"
+                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+        
+        <!-- Reference contributor for Cmd+Click navigation -->
+        <psi.referenceContributor language="JavaScript"
+                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+        <psi.referenceContributor language="TypeScript"
+                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+        <psi.referenceContributor language="Vue"
+                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+        <psi.referenceContributor language="TypeScript JSX"
+                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+        
+        <!-- Line marker for cross-language navigation in translation files -->
+        <codeInsight.lineMarkerProvider language="JSON"
+                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="yaml"
+                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="JavaScript"
+                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+        <codeInsight.lineMarkerProvider language="TypeScript"
+                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+        
+        <!-- File listener for cache invalidation -->
+        <vfs.asyncListener implementation="com.github.yelog.i18nhelper.listener.I18nFileListener"/>
     </extensions>
 </idea-plugin>

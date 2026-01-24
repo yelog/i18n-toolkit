@@ -33,6 +33,11 @@ repositories {
 dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.opentest4j)
+    
+    // YAML parsing
+    implementation("org.yaml:snakeyaml:2.2")
+    // TOML parsing
+    implementation("com.moandjiezana.toml:toml4j:0.7.2")
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
