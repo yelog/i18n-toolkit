@@ -1,7 +1,10 @@
 package com.github.yelog.i18nhelper.settings
 
-import com.github.yelog.i18nhelper.service.I18nCacheService
-import com.github.yelog.i18nhelper.util.I18nUiRefresher
+import java.awt.event.KeyAdapter
+import java.awt.event.KeyEvent
+import javax.swing.JComponent
+import javax.swing.JLabel
+import javax.swing.KeyStroke
 import com.intellij.openapi.actionSystem.KeyboardShortcut
 import com.intellij.openapi.keymap.KeymapManager
 import com.intellij.openapi.keymap.KeymapUtil
@@ -11,11 +14,8 @@ import com.intellij.ui.CollectionComboBoxModel
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
-import javax.swing.JComponent
-import javax.swing.JLabel
-import javax.swing.KeyStroke
-import java.awt.event.KeyAdapter
-import java.awt.event.KeyEvent
+import com.github.yelog.i18nhelper.service.I18nCacheService
+import com.github.yelog.i18nhelper.util.I18nUiRefresher
 
 class I18nSettingsConfigurable(private val project: Project) : Configurable {
 
@@ -29,6 +29,7 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
 
     private var panel: com.intellij.openapi.ui.DialogPanel? = null
     private var shortcutField: ShortcutCaptureField? = null
+    private var popupShortcutField: ShortcutCaptureField? = null
     private var detectedFrameworkLabel: JLabel? = null
 
     override fun getDisplayName(): String = "I18n Helper"
@@ -38,7 +39,11 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
 
         val shortcut = ShortcutCaptureField()
         shortcutField = shortcut
-        shortcut.setShortcut(getCurrentKeyboardShortcut())
+        shortcut.setShortcut(getCurrentKeyboardShortcut(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID))
+
+        val popupShortcut = ShortcutCaptureField()
+        popupShortcutField = popupShortcut
+        popupShortcut.setShortcut(getCurrentKeyboardShortcut(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID))
 
         val detectedLabel = JLabel(getDetectedFrameworkText())
         detectedFrameworkLabel = detectedLabel
@@ -68,7 +73,19 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
                     }
                 }
                 row {
-                    label(getShortcutText())
+                    label(getShortcutText(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID))
+                }
+            }
+
+            group("Translations Popup") {
+                row("Shortcut") {
+                    cell(popupShortcut)
+                    button("Clear") {
+                        popupShortcut.setShortcut(null)
+                    }
+                }
+                row {
+                    label(getShortcutText(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID))
                 }
             }
 
@@ -90,7 +107,9 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
 
     override fun isModified(): Boolean {
         val panelModified = panel?.isModified() ?: false
-        return panelModified || shortcutChanged()
+        return panelModified ||
+            shortcutChanged(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID, shortcutField) ||
+            shortcutChanged(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID, popupShortcutField)
     }
 
     override fun apply() {
@@ -98,7 +117,8 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
         settings.state.displayLocale = displayLocale
         settings.state.displayMode = displayMode
         settings.state.frameworkSetting = frameworkSetting
-        updateShortcut()
+        updateShortcut(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID, shortcutField)
+        updateShortcut(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID, popupShortcutField)
         updateDetectedFrameworkLabel()
         I18nUiRefresher.refresh(project)
     }
@@ -108,13 +128,15 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
         displayMode = settings.state.displayMode
         frameworkSetting = settings.state.frameworkSetting
         panel?.reset()
-        shortcutField?.setShortcut(getCurrentKeyboardShortcut())
+        shortcutField?.setShortcut(getCurrentKeyboardShortcut(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID))
+        popupShortcutField?.setShortcut(getCurrentKeyboardShortcut(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID))
         updateDetectedFrameworkLabel()
     }
 
     override fun disposeUIResources() {
         panel = null
         shortcutField = null
+        popupShortcutField = null
         detectedFrameworkLabel = null
     }
 
@@ -135,30 +157,30 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
         detectedFrameworkLabel?.text = getDetectedFrameworkText()
     }
 
-    private fun shortcutChanged(): Boolean {
-        val current = getCurrentKeyboardShortcut()
-        val uiShortcut = shortcutField?.shortcut
-        return current != uiShortcut
+    private fun shortcutChanged(actionId: String, field: ShortcutCaptureField?): Boolean {
+        val current = getCurrentKeyboardShortcut(actionId)
+        val uiShortcut = field?.shortcut
+        return field != null && current != uiShortcut
     }
 
-    private fun getCurrentKeyboardShortcut(): KeyboardShortcut? {
+    private fun getCurrentKeyboardShortcut(actionId: String): KeyboardShortcut? {
         val keymap = KeymapManager.getInstance().activeKeymap
-        return keymap.getShortcuts(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID)
+        return keymap.getShortcuts(actionId)
             .filterIsInstance<KeyboardShortcut>()
             .firstOrNull()
     }
 
-    private fun getShortcutText(): String {
-        val shortcut = getCurrentKeyboardShortcut() ?: return "Not set"
+    private fun getShortcutText(actionId: String): String {
+        val shortcut = getCurrentKeyboardShortcut(actionId) ?: return "Not set"
         return "Current: ${KeymapUtil.getShortcutText(shortcut)}"
     }
 
-    private fun updateShortcut() {
+    private fun updateShortcut(actionId: String, field: ShortcutCaptureField?) {
         val keymap = KeymapManager.getInstance().activeKeymap
-        keymap.removeAllActionShortcuts(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID)
-        val shortcut = shortcutField?.shortcut
+        keymap.removeAllActionShortcuts(actionId)
+        val shortcut = field?.shortcut
         if (shortcut != null) {
-            keymap.addShortcut(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID, shortcut)
+            keymap.addShortcut(actionId, shortcut)
         }
     }
 

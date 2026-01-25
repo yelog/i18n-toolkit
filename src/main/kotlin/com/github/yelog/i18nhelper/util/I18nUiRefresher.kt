@@ -10,6 +10,8 @@ import com.intellij.util.FileContentUtil
 
 object I18nUiRefresher {
     const val SWITCH_LOCALE_ACTION_ID = "I18nHelper.SwitchLocale"
+    const val TRANSLATIONS_POPUP_ACTION_ID = "I18nHelper.ShowTranslationsPopup"
+    const val COPY_KEY_ACTION_ID = "I18nHelper.CopyKey"
 
     fun refresh(project: Project) {
         // Clear all caches
