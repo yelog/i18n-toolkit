@@ -37,7 +37,21 @@
 
         <!-- Goto declaration handler for Cmd+Click on folded regions -->
         <gotoDeclarationHandler implementation="com.github.yelog.i18nhelper.navigation.I18nGotoDeclarationHandler" order="first"/>
-        
+
+        <!-- Documentation provider for Quick Definition/Documentation on i18n keys -->
+        <lang.documentationProvider language="JavaScript"
+                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    order="first"/>
+        <lang.documentationProvider language="TypeScript"
+                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    order="first"/>
+        <lang.documentationProvider language="Vue"
+                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    order="first"/>
+        <lang.documentationProvider language="TypeScript JSX"
+                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    order="first"/>
+
         <!-- Inlay hints for showing translations inline -->
         <codeInsight.inlayProvider language="JavaScript"
                                    implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
@@ -84,6 +98,9 @@
         
         <!-- File listener for cache invalidation -->
         <vfs.asyncListener implementation="com.github.yelog.i18nhelper.listener.I18nFileListener"/>
+
+        <!-- Find Usages support for i18n keys in translation files -->
+        <referencesSearch implementation="com.github.yelog.i18nhelper.reference.I18nUsageSearcher"/>
     </extensions>
 
     <actions>

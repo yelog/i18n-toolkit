@@ -2,6 +2,7 @@ package com.github.yelog.i18nhelper.reference
 
 import com.github.yelog.i18nhelper.scanner.I18nDirectoryScanner
 import com.github.yelog.i18nhelper.service.I18nCacheService
+import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.json.psi.JsonProperty
 import com.intellij.json.psi.JsonStringLiteral
 import com.intellij.lang.javascript.psi.JSCallExpression
@@ -146,14 +147,24 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
         if (args.isEmpty()) return
 
         val firstArg = args[0] as? JSLiteralExpression ?: return
-        val argValue = firstArg.stringValue ?: return
+        val partialKey = firstArg.stringValue ?: return
 
-        if (argValue == key) {
+        // Resolve full key including namespace from useTranslation hook
+        val fullKey = I18nNamespaceResolver.getFullKey(callExpr, partialKey)
+
+        // Match if either full key or partial key matches the searched key
+        // Also match if searched key ends with the partial key (for namespace-prefixed searches)
+        val isMatch = fullKey == key || partialKey == key ||
+                (key.contains('.') && key.endsWith(".$partialKey"))
+
+        if (isMatch) {
             firstArg.references.forEach { ref ->
                 consumer.process(ref)
             }
             if (firstArg.references.isEmpty()) {
-                consumer.process(I18nKeyReference(firstArg, firstArg.textRange, key))
+                // Use relative text range (within the string literal)
+                val relativeRange = com.intellij.openapi.util.TextRange(1, partialKey.length + 1)
+                consumer.process(I18nKeyReference(firstArg, relativeRange, fullKey, partialKey))
             }
         }
     }

@@ -3,6 +3,7 @@ package com.github.yelog.i18nhelper.hint
 import com.github.yelog.i18nhelper.service.I18nCacheService
 import com.github.yelog.i18nhelper.settings.I18nDisplayMode
 import com.github.yelog.i18nhelper.settings.I18nSettingsState
+import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.codeInsight.hints.*
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
 import com.intellij.codeInsight.hints.presentation.PresentationFactory
@@ -13,7 +14,6 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.psi.PsiFile
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.psi.PsiElement
-import java.util.concurrent.ConcurrentHashMap
 import javax.swing.JComponent
 import javax.swing.JPanel
 
@@ -21,21 +21,25 @@ import javax.swing.JPanel
 class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
 
     companion object {
-        private val fileProcessedOffsets = ConcurrentHashMap<String, MutableSet<Int>>()
-        private val fileTimestamps = ConcurrentHashMap<String, Long>()
+        @Volatile
+        private var settingsVersion = 0L
 
-        fun getOrCreateOffsetSet(filePath: String, documentTimestamp: Long): MutableSet<Int> {
-            val lastTimestamp = fileTimestamps[filePath]
-            if (lastTimestamp != documentTimestamp) {
-                fileProcessedOffsets[filePath] = ConcurrentHashMap.newKeySet()
-                fileTimestamps[filePath] = documentTimestamp
-            }
-            return fileProcessedOffsets.getOrPut(filePath) { ConcurrentHashMap.newKeySet() }
-        }
+        // Global cache to track processed hints across language instances
+        // Key: "filePath:modStamp:offset" - includes modification stamp for automatic invalidation
+        private val globalProcessedHints = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        private const val MAX_CACHE_SIZE = 10000
 
         fun clearCache() {
-            fileProcessedOffsets.clear()
-            fileTimestamps.clear()
+            // Increment version to invalidate any cached state
+            settingsVersion++
+            globalProcessedHints.clear()
+        }
+
+        private fun checkAndCleanCache() {
+            // Prevent memory leak by clearing cache when it gets too large
+            if (globalProcessedHints.size > MAX_CACHE_SIZE) {
+                globalProcessedHints.clear()
+            }
         }
     }
 
@@ -57,17 +61,15 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
         settings: NoSettings,
         sink: InlayHintsSink
     ): InlayHintsCollector {
-        val filePath = file.originalFile.virtualFile?.path
-            ?: file.virtualFile?.path
-            ?: file.name
-        val timestamp = editor.document.modificationStamp
-        return I18nInlayHintsCollector(editor, filePath, timestamp)
+        val filePath = file.virtualFile?.path ?: ""
+        val modStamp = file.modificationStamp
+        return I18nInlayHintsCollector(editor, filePath, modStamp)
     }
 
     private class I18nInlayHintsCollector(
         editor: Editor,
         private val filePath: String,
-        private val documentTimestamp: Long
+        private val modStamp: Long
     ) : FactoryInlayHintsCollector(editor) {
 
         private val i18nFunctions = setOf("t", "\$t", "i18n", "i18next", "translate", "formatMessage")
@@ -86,10 +88,19 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             val firstArg = args[0]
             val offset = getHostOffset(firstArg, firstArg.textRange.endOffset)
 
-            val key = when (firstArg) {
+            // Deduplicate across all language collector instances using global cache
+            // Key includes modification stamp so hints are refreshed when file changes
+            val hintKey = "$filePath:$modStamp:$offset"
+            checkAndCleanCache()
+            if (globalProcessedHints.putIfAbsent(hintKey, true) != null) return true
+
+            val partialKey = when (firstArg) {
                 is JSLiteralExpression -> firstArg.stringValue
                 else -> null
             } ?: return true
+
+            // Resolve full key including namespace from useTranslation hook
+            val fullKey = I18nNamespaceResolver.getFullKey(element, partialKey)
 
             val project = element.project
             val cacheService = I18nCacheService.getInstance(project)
@@ -97,10 +108,10 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             if (settings.state.displayMode == I18nDisplayMode.TRANSLATION_ONLY) return true
 
             val locale = settings.getDisplayLocaleOrNull()
-            val translation = cacheService.getTranslation(key, locale) ?: return true
-
-            val processedOffsets = getOrCreateOffsetSet(filePath, documentTimestamp)
-            if (!processedOffsets.add(offset)) return true
+            // Try full key first, then partial key as fallback
+            val translation = cacheService.getTranslation(fullKey, locale)
+                ?: cacheService.getTranslation(partialKey, locale)
+                ?: return true
 
             val translationText = truncateText(translation.value, 50)
             val presentation = createPresentation(factory, translationText)

@@ -1,10 +1,14 @@
 package com.github.yelog.i18nhelper.navigation
 
 import com.github.yelog.i18nhelper.model.TranslationEntry
+import com.github.yelog.i18nhelper.scanner.I18nDirectoryScanner
 import com.github.yelog.i18nhelper.service.I18nCacheService
+import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.codeInsight.navigation.actions.GotoDeclarationHandler
+import com.intellij.json.psi.JsonProperty
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
+import com.intellij.lang.javascript.psi.JSProperty
 import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.navigation.ItemPresentation
 import com.intellij.openapi.editor.Document
@@ -19,7 +23,7 @@ import com.intellij.psi.util.PsiTreeUtil
 import javax.swing.Icon
 
 /**
- * Handles Cmd+Click navigation for i18n keys, including folded regions
+ * Handles Cmd+Click navigation for i18n keys, including folded regions and translation files
  */
 class I18nGotoDeclarationHandler : GotoDeclarationHandler {
 
@@ -35,12 +39,23 @@ class I18nGotoDeclarationHandler : GotoDeclarationHandler {
         val project = sourceElement.project
         val document = editor.document
         val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(document) ?: return null
-
-        // Find the i18n call at the current offset
-        val i18nKey = findI18nKeyAtOffset(psiFile, offset) ?: return null
+        val virtualFile = psiFile.virtualFile ?: return null
 
         val cacheService = I18nCacheService.getInstance(project)
-        val entries = cacheService.getAllTranslations(i18nKey)
+
+        // Check if we're in a translation file - handle cycling between locales
+        if (I18nDirectoryScanner.isTranslationFile(virtualFile)) {
+            return handleTranslationFileNavigation(sourceElement, cacheService, project)
+        }
+
+        // Find the i18n call at the current offset
+        val (fullKey, partialKey) = findI18nKeyAtOffset(psiFile, offset) ?: return null
+
+        // Try full key first, then fallback to partial key
+        var entries = cacheService.getAllTranslations(fullKey)
+        if (entries.isEmpty() && fullKey != partialKey) {
+            entries = cacheService.getAllTranslations(partialKey)
+        }
 
         if (entries.isEmpty()) return null
 
@@ -61,19 +76,89 @@ class I18nGotoDeclarationHandler : GotoDeclarationHandler {
         return if (targets.isNotEmpty()) targets.toTypedArray() else null
     }
 
-    private fun findI18nKeyAtOffset(psiFile: PsiElement, offset: Int): String? {
+    /**
+     * Handle Cmd+Click in translation files - cycle to next locale
+     */
+    private fun handleTranslationFileNavigation(
+        sourceElement: PsiElement,
+        cacheService: I18nCacheService,
+        project: com.intellij.openapi.project.Project
+    ): Array<PsiElement>? {
+        // Find the property element (JSON or JS/TS)
+        val property = findPropertyElement(sourceElement) ?: return null
+        val virtualFile = sourceElement.containingFile?.virtualFile ?: return null
+
+        val translationFile = cacheService.getTranslationFile(virtualFile) ?: return null
+        val fullKey = buildFullKey(property, translationFile.keyPrefix)
+
+        // Get all translations for this key
+        val allTranslations = cacheService.getAllTranslations(fullKey)
+        if (allTranslations.size <= 1) return null
+
+        // Sort locales for consistent ordering
+        val sortedLocales = allTranslations.keys.sorted()
+        val currentLocale = translationFile.locale
+
+        // Find next locale in cycle
+        val currentIndex = sortedLocales.indexOf(currentLocale)
+        val nextIndex = if (currentIndex >= 0) (currentIndex + 1) % sortedLocales.size else 0
+        val nextLocale = sortedLocales[nextIndex]
+
+        val nextEntry = allTranslations[nextLocale] ?: return null
+
+        val psiElement = findPsiElement(project, nextEntry) ?: return null
+        return arrayOf(I18nNavigationTarget(psiElement, nextEntry, project.basePath))
+    }
+
+    private fun findPropertyElement(element: PsiElement): PsiElement? {
+        var current: PsiElement? = element
+        while (current != null) {
+            if (current is JsonProperty || current is JSProperty) {
+                return current
+            }
+            current = current.parent
+        }
+        return null
+    }
+
+    private fun buildFullKey(property: PsiElement, prefix: String): String {
+        val keyParts = mutableListOf<String>()
+        var current: PsiElement? = property
+
+        while (current != null) {
+            when (current) {
+                is JsonProperty -> {
+                    keyParts.add(0, current.name)
+                    current = current.parent?.parent
+                }
+                is JSProperty -> {
+                    current.name?.let { keyParts.add(0, it) }
+                    current = current.parent?.parent
+                }
+                else -> current = current.parent
+            }
+        }
+
+        val key = keyParts.joinToString(".")
+        return if (prefix.isEmpty()) key else "$prefix$key"
+    }
+
+    /**
+     * Returns a pair of (fullKey, partialKey) where fullKey includes namespace prefix
+     */
+    private fun findI18nKeyAtOffset(psiFile: PsiElement, offset: Int): Pair<String, String>? {
         // Try to find JSLiteralExpression at offset
         var element = psiFile.findElementAt(offset)
 
         // Walk up to find JSCallExpression
         while (element != null) {
             if (element is JSCallExpression) {
-                return extractI18nKey(element)
+                return extractI18nKeys(element)
             }
             if (element is JSLiteralExpression) {
                 val call = PsiTreeUtil.getParentOfType(element, JSCallExpression::class.java)
                 if (call != null) {
-                    return extractI18nKey(call)
+                    return extractI18nKeys(call)
                 }
             }
             element = element.parent
@@ -84,9 +169,9 @@ class I18nGotoDeclarationHandler : GotoDeclarationHandler {
         val calls = PsiTreeUtil.findChildrenOfType(psiFile, JSCallExpression::class.java)
         for (call in calls) {
             if (call.textRange.startOffset in searchRange || call.textRange.endOffset in searchRange) {
-                val key = extractI18nKey(call)
-                if (key != null && call.textRange.contains(offset)) {
-                    return key
+                val keys = extractI18nKeys(call)
+                if (keys != null && call.textRange.contains(offset)) {
+                    return keys
                 }
             }
         }
@@ -94,7 +179,10 @@ class I18nGotoDeclarationHandler : GotoDeclarationHandler {
         return null
     }
 
-    private fun extractI18nKey(call: JSCallExpression): String? {
+    /**
+     * Returns a pair of (fullKey, partialKey) where fullKey includes namespace prefix
+     */
+    private fun extractI18nKeys(call: JSCallExpression): Pair<String, String>? {
         val methodExpr = call.methodExpression as? JSReferenceExpression ?: return null
         val methodName = methodExpr.referenceName ?: return null
 
@@ -104,7 +192,9 @@ class I18nGotoDeclarationHandler : GotoDeclarationHandler {
         if (args.isEmpty()) return null
 
         val firstArg = args[0] as? JSLiteralExpression ?: return null
-        return firstArg.stringValue
+        val partialKey = firstArg.stringValue ?: return null
+        val fullKey = I18nNamespaceResolver.getFullKey(call, partialKey)
+        return Pair(fullKey, partialKey)
     }
 
     private fun findPsiElement(project: com.intellij.openapi.project.Project, entry: TranslationEntry): PsiElement? {

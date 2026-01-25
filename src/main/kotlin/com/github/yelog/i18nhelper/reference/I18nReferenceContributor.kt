@@ -2,6 +2,7 @@ package com.github.yelog.i18nhelper.reference
 
 import com.github.yelog.i18nhelper.model.TranslationEntry
 import com.github.yelog.i18nhelper.service.I18nCacheService
+import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
@@ -44,7 +45,8 @@ class I18nReferenceProvider : PsiReferenceProvider() {
         val literal = element as? JSLiteralExpression ?: return PsiReference.EMPTY_ARRAY
         val stringValue = literal.stringValue ?: return PsiReference.EMPTY_ARRAY
 
-        if (!isI18nFunctionArgument(literal)) {
+        val callExpr = PsiTreeUtil.getParentOfType(literal, JSCallExpression::class.java)
+        if (!isI18nFunctionArgument(literal, callExpr)) {
             return PsiReference.EMPTY_ARRAY
         }
 
@@ -56,12 +58,19 @@ class I18nReferenceProvider : PsiReferenceProvider() {
             processedElements.add(element)
         }
 
+        // Resolve full key including namespace from useTranslation hook
+        val fullKey = if (callExpr != null) {
+            I18nNamespaceResolver.getFullKey(callExpr, stringValue)
+        } else {
+            stringValue
+        }
+
         val textRange = TextRange(1, stringValue.length + 1)
-        return arrayOf(I18nKeyReference(literal, textRange, stringValue))
+        return arrayOf(I18nKeyReference(literal, textRange, fullKey, stringValue))
     }
 
-    private fun isI18nFunctionArgument(literal: JSLiteralExpression): Boolean {
-        val callExpr = PsiTreeUtil.getParentOfType(literal, JSCallExpression::class.java) ?: return false
+    private fun isI18nFunctionArgument(literal: JSLiteralExpression, callExpr: JSCallExpression?): Boolean {
+        callExpr ?: return false
         val methodExpr = callExpr.methodExpression as? JSReferenceExpression ?: return false
         val methodName = methodExpr.referenceName ?: return false
 
@@ -75,7 +84,8 @@ class I18nReferenceProvider : PsiReferenceProvider() {
 class I18nKeyReference(
     element: PsiElement,
     textRange: TextRange,
-    private val key: String
+    private val fullKey: String,
+    private val partialKey: String = fullKey
 ) : PsiReferenceBase<PsiElement>(element, textRange), PsiPolyVariantReference {
 
     override fun resolve(): PsiElement? {
@@ -86,7 +96,11 @@ class I18nKeyReference(
     override fun multiResolve(incompleteCode: Boolean): Array<ResolveResult> {
         val project = element.project
         val cacheService = I18nCacheService.getInstance(project)
-        val entries = cacheService.getAllTranslations(key)
+        // Try full key first (with namespace), then fallback to partial key
+        var entries = cacheService.getAllTranslations(fullKey)
+        if (entries.isEmpty() && fullKey != partialKey) {
+            entries = cacheService.getAllTranslations(partialKey)
+        }
 
         // Deduplicate by file path and offset
         val seen = mutableSetOf<String>()

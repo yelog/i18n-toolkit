@@ -3,6 +3,7 @@ package com.github.yelog.i18nhelper.folding
 import com.github.yelog.i18nhelper.service.I18nCacheService
 import com.github.yelog.i18nhelper.settings.I18nDisplayMode
 import com.github.yelog.i18nhelper.settings.I18nSettingsState
+import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.lang.ASTNode
 import com.intellij.lang.folding.FoldingBuilderEx
 import com.intellij.lang.folding.FoldingDescriptor
@@ -12,26 +13,16 @@ import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.openapi.editor.Document
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
-import java.util.concurrent.ConcurrentHashMap
 
 class I18nFoldingBuilder : FoldingBuilderEx() {
 
     companion object {
-        private val fileProcessedOffsets = ConcurrentHashMap<String, MutableSet<Int>>()
-        private val fileTimestamps = ConcurrentHashMap<String, Long>()
-
-        private fun getOrCreateOffsetSet(filePath: String, documentTimestamp: Long): MutableSet<Int> {
-            val lastTimestamp = fileTimestamps[filePath]
-            if (lastTimestamp != documentTimestamp) {
-                fileProcessedOffsets[filePath] = ConcurrentHashMap.newKeySet()
-                fileTimestamps[filePath] = documentTimestamp
-            }
-            return fileProcessedOffsets.getOrPut(filePath) { ConcurrentHashMap.newKeySet() }
-        }
+        @Volatile
+        private var settingsVersion = 0L
 
         fun clearCache() {
-            fileProcessedOffsets.clear()
-            fileTimestamps.clear()
+            // Increment version to signal settings change
+            settingsVersion++
         }
     }
 
@@ -42,14 +33,11 @@ class I18nFoldingBuilder : FoldingBuilderEx() {
         val settings = I18nSettingsState.getInstance(project)
         if (settings.state.displayMode != I18nDisplayMode.TRANSLATION_ONLY) return emptyArray()
 
-        val filePath = root.containingFile.originalFile.virtualFile?.path
-            ?: root.containingFile.virtualFile?.path
-            ?: root.containingFile.name
-        val processedOffsets = getOrCreateOffsetSet(filePath, document.modificationStamp)
-
         val cacheService = I18nCacheService.getInstance(project)
         val locale = settings.getDisplayLocaleOrNull()
         val descriptors = mutableListOf<FoldingDescriptor>()
+        // Use local set for deduplication within this build pass only
+        val processedOffsets = mutableSetOf<Int>()
 
         val calls = PsiTreeUtil.findChildrenOfType(root, JSCallExpression::class.java)
         for (call in calls) {
@@ -60,8 +48,12 @@ class I18nFoldingBuilder : FoldingBuilderEx() {
             val args = call.arguments
             if (args.isEmpty()) continue
             val firstArg = args[0] as? JSLiteralExpression ?: continue
-            val key = firstArg.stringValue ?: continue
-            val translation = cacheService.getTranslation(key, locale) ?: continue
+            val partialKey = firstArg.stringValue ?: continue
+            // Resolve full key including namespace from useTranslation hook
+            val fullKey = I18nNamespaceResolver.getFullKey(call, partialKey)
+            val translation = cacheService.getTranslation(fullKey, locale)
+                ?: cacheService.getTranslation(partialKey, locale)
+                ?: continue
 
             val offset = firstArg.textRange.endOffset
             if (!processedOffsets.add(offset)) continue
@@ -75,10 +67,22 @@ class I18nFoldingBuilder : FoldingBuilderEx() {
 
     override fun getPlaceholderText(node: ASTNode): String? {
         val literal = node.psi as? JSLiteralExpression ?: return null
-        val key = literal.stringValue ?: return null
+        val partialKey = literal.stringValue ?: return null
+
+        // Find parent call expression to resolve namespace
+        val callExpr = PsiTreeUtil.getParentOfType(literal, JSCallExpression::class.java)
+        val fullKey = if (callExpr != null) {
+            I18nNamespaceResolver.getFullKey(callExpr, partialKey)
+        } else {
+            partialKey
+        }
+
         val settings = I18nSettingsState.getInstance(literal.project)
         val locale = settings.getDisplayLocaleOrNull()
-        val translation = I18nCacheService.getInstance(literal.project).getTranslation(key, locale) ?: return null
+        val cacheService = I18nCacheService.getInstance(literal.project)
+        val translation = cacheService.getTranslation(fullKey, locale)
+            ?: cacheService.getTranslation(partialKey, locale)
+            ?: return null
 
         // Keep the quotes and replace only the content
         val quote = literal.text.firstOrNull() ?: '"'
