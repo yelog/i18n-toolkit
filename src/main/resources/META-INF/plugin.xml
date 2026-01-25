@@ -22,12 +22,21 @@
 
     <resource-bundle>messages.I18nBundle</resource-bundle>
 
+    <applicationListeners>
+        <!-- Dynamic plugin loading listener - no restart required -->
+        <listener class="com.github.yelog.i18nhelper.startup.I18nDynamicPluginListener"
+                  topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+    </applicationListeners>
+
     <extensions defaultExtensionNs="com.intellij">
         <!-- Project Service for caching translations -->
         <projectService serviceImplementation="com.github.yelog.i18nhelper.service.I18nCacheService"/>
-        
+
         <!-- Startup activity to initialize cache -->
         <postStartupActivity implementation="com.github.yelog.i18nhelper.startup.I18nProjectActivity"/>
+
+        <!-- Goto declaration handler for Cmd+Click on folded regions -->
+        <gotoDeclarationHandler implementation="com.github.yelog.i18nhelper.navigation.I18nGotoDeclarationHandler" order="first"/>
         
         <!-- Inlay hints for showing translations inline -->
         <codeInsight.inlayProvider language="JavaScript"
