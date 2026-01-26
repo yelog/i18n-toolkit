@@ -33,7 +33,8 @@ class I18nSettingsState(private val project: Project) : PersistentStateComponent
     data class State(
         var displayLocale: String = "",
         var displayMode: I18nDisplayMode = I18nDisplayMode.INLINE,
-        var frameworkSetting: I18nFrameworkSetting = I18nFrameworkSetting.AUTO
+        var frameworkSetting: I18nFrameworkSetting = I18nFrameworkSetting.AUTO,
+        var customI18nFunctions: String = "t, \$t"
     )
 
     private var state = State()
@@ -46,6 +47,17 @@ class I18nSettingsState(private val project: Project) : PersistentStateComponent
 
     fun getDisplayLocaleOrNull(): String? {
         return state.displayLocale.takeIf { it.isNotEmpty() }
+    }
+
+    fun getI18nFunctions(): Set<String> {
+        return parseI18nFunctions(state.customI18nFunctions)
+    }
+
+    private fun parseI18nFunctions(input: String): Set<String> {
+        return input.split(",")
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
     }
 
     companion object {

@@ -22,8 +22,48 @@ object I18nFrameworkDetector {
 
     fun detect(project: Project): I18nFramework {
         val baseDir = project.basePath ?: return I18nFramework.UNKNOWN
+
+        // Check for Spring Boot project first (Java/Kotlin projects)
+        if (isSpringBootProject(project, baseDir)) {
+            return I18nFramework.SPRING_MESSAGE
+        }
+
+        // Then check for JavaScript/TypeScript projects
         val packageJsonFile = findPackageJson(project, baseDir) ?: return I18nFramework.UNKNOWN
         return parsePackageJson(project, packageJsonFile)
+    }
+
+    private fun isSpringBootProject(project: Project, basePath: String): Boolean {
+        val baseDir = project.guessProjectDir() ?: return false
+
+        // Check for pom.xml (Maven)
+        val pomFile = baseDir.findChild("pom.xml")
+        if (pomFile != null && containsSpringDependency(pomFile, project)) {
+            return true
+        }
+
+        // Check for build.gradle or build.gradle.kts (Gradle)
+        val gradleFile = baseDir.findChild("build.gradle") ?: baseDir.findChild("build.gradle.kts")
+        if (gradleFile != null && containsSpringDependency(gradleFile, project)) {
+            return true
+        }
+
+        return false
+    }
+
+    private fun containsSpringDependency(file: VirtualFile, project: Project): Boolean {
+        try {
+            val content = String(file.contentsToByteArray())
+            val springPatterns = listOf(
+                "spring-boot-starter",
+                "spring-context",
+                "org.springframework.boot",
+                "org.springframework:spring-context"
+            )
+            return springPatterns.any { content.contains(it) }
+        } catch (e: Exception) {
+            return false
+        }
     }
 
     private fun findPackageJson(project: Project, basePath: String): VirtualFile? {

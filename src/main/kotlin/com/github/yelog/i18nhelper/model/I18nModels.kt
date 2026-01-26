@@ -10,6 +10,7 @@ enum class I18nFramework(val displayName: String, val packageNames: List<String>
     NEXT_INTL("next-intl", listOf("next-intl")),
     NUXT_I18N("@nuxtjs/i18n", listOf("@nuxtjs/i18n")),
     REACT_INTL("react-intl", listOf("react-intl")),
+    SPRING_MESSAGE("spring message", listOf("spring-boot-starter", "spring-context")),
     UNKNOWN("unknown", emptyList());
 
     companion object {

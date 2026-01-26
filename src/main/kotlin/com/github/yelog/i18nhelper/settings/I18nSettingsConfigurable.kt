@@ -26,6 +26,7 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
     private var displayLocale: String = settings.state.displayLocale
     private var displayMode: I18nDisplayMode = settings.state.displayMode
     private var frameworkSetting: I18nFrameworkSetting = settings.state.frameworkSetting
+    private var customI18nFunctions: String = settings.state.customI18nFunctions
 
     private var panel: com.intellij.openapi.ui.DialogPanel? = null
     private var shortcutField: ShortcutCaptureField? = null
@@ -99,6 +100,15 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
                     cell(detectedLabel)
                 }
             }
+
+            group("Custom I18n Functions") {
+                row("Function names") {
+                    textField()
+                        .bindText({ customI18nFunctions }, { customI18nFunctions = it })
+                        .columns(COLUMNS_LARGE)
+                        .comment("Comma-separated list of i18n function names, e.g., t, \$t, LangUtil.get")
+                }
+            }
         }
 
         this.panel = panel
@@ -117,6 +127,7 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
         settings.state.displayLocale = displayLocale
         settings.state.displayMode = displayMode
         settings.state.frameworkSetting = frameworkSetting
+        settings.state.customI18nFunctions = customI18nFunctions
         updateShortcut(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID, shortcutField)
         updateShortcut(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID, popupShortcutField)
         updateDetectedFrameworkLabel()
@@ -127,6 +138,7 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
         displayLocale = settings.state.displayLocale
         displayMode = settings.state.displayMode
         frameworkSetting = settings.state.frameworkSetting
+        customI18nFunctions = settings.state.customI18nFunctions
         panel?.reset()
         shortcutField?.setShortcut(getCurrentKeyboardShortcut(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID))
         popupShortcutField?.setShortcut(getCurrentKeyboardShortcut(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID))

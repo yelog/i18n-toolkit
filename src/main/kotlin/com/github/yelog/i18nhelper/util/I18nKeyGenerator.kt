@@ -69,11 +69,16 @@ object I18nKeyGenerator {
     private fun parseStandardLocalePattern(parts: List<String>, fileName: String): PathInfo {
         val localeInfo = extractLocaleAndModule(parts, fileName)
 
-        val keyPrefix = if (localeInfo.module != null) "${localeInfo.module}." else ""
+        // Don't use "message" or "messages" as module prefix (common in Spring Message)
+        val shouldIncludeModule = localeInfo.module != null &&
+                !localeInfo.module.equals("message", ignoreCase = true) &&
+                !localeInfo.module.equals("messages", ignoreCase = true)
+
+        val keyPrefix = if (shouldIncludeModule) "${localeInfo.module}." else ""
 
         return PathInfo(
             locale = localeInfo.locale,
-            module = localeInfo.module,
+            module = if (shouldIncludeModule) localeInfo.module else null,
             businessUnit = null,
             keyPrefix = keyPrefix
         )

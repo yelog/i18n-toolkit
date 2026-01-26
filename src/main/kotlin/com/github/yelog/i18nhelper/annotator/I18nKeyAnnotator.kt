@@ -3,6 +3,7 @@ package com.github.yelog.i18nhelper.annotator
 import com.github.yelog.i18nhelper.quickfix.CreateI18nKeyQuickFix
 import com.github.yelog.i18nhelper.service.I18nCacheService
 import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
+import com.github.yelog.i18nhelper.util.I18nFunctionResolver
 import com.intellij.lang.annotation.AnnotationHolder
 import com.intellij.lang.annotation.Annotator
 import com.intellij.lang.annotation.HighlightSeverity
@@ -19,10 +20,6 @@ import com.intellij.psi.PsiElement
  */
 class I18nKeyAnnotator : Annotator {
 
-    companion object {
-        private val I18N_FUNCTIONS = setOf("t", "\$t", "i18n", "i18next", "translate", "formatMessage")
-    }
-
     override fun annotate(element: PsiElement, holder: AnnotationHolder) {
         // Only process call expressions
         if (element !is JSCallExpression) return
@@ -30,7 +27,9 @@ class I18nKeyAnnotator : Annotator {
         // Check if it's an i18n function call
         val methodExpr = element.methodExpression as? JSReferenceExpression ?: return
         val methodName = methodExpr.referenceName ?: return
-        if (!I18N_FUNCTIONS.contains(methodName)) return
+
+        val i18nFunctions = I18nFunctionResolver.getFunctions(element.project)
+        if (!i18nFunctions.contains(methodName)) return
 
         // Get the first argument (the key)
         val args = element.arguments

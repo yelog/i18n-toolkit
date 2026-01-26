@@ -3,6 +3,7 @@ package com.github.yelog.i18nhelper.reference
 import com.github.yelog.i18nhelper.scanner.I18nDirectoryScanner
 import com.github.yelog.i18nhelper.service.I18nCacheService
 import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
+import com.github.yelog.i18nhelper.util.I18nFunctionResolver
 import com.intellij.json.psi.JsonProperty
 import com.intellij.json.psi.JsonStringLiteral
 import com.intellij.lang.javascript.psi.JSCallExpression
@@ -23,8 +24,6 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.util.Processor
 
 class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.SearchParameters>(true) {
-
-    private val i18nFunctions = setOf("t", "\$t", "i18n", "i18next", "translate", "formatMessage")
 
     override fun processQuery(
         queryParameters: ReferencesSearch.SearchParameters,
@@ -155,6 +154,7 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
         val methodExpr = callExpr.methodExpression as? JSReferenceExpression ?: return
         val methodName = methodExpr.referenceName ?: return
 
+        val i18nFunctions = I18nFunctionResolver.getFunctions(callExpr.project)
         if (!i18nFunctions.contains(methodName)) return
 
         val args = callExpr.arguments

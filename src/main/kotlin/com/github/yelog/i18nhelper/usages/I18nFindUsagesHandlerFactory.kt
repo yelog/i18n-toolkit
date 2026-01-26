@@ -4,6 +4,7 @@ import com.github.yelog.i18nhelper.reference.I18nKeyReference
 import com.github.yelog.i18nhelper.scanner.I18nDirectoryScanner
 import com.github.yelog.i18nhelper.service.I18nCacheService
 import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
+import com.github.yelog.i18nhelper.util.I18nFunctionResolver
 import com.intellij.find.findUsages.FindUsagesHandler
 import com.intellij.find.findUsages.FindUsagesHandlerFactory
 import com.intellij.json.psi.JsonProperty
@@ -30,8 +31,6 @@ import com.intellij.util.Processor
  * instead of plain string occurrences.
  */
 class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
-
-    private val i18nFunctions = setOf("t", "\$t", "i18n", "i18next", "translate", "formatMessage")
 
     override fun canFindUsages(element: PsiElement): Boolean {
         // All PSI access should be in ReadAction
@@ -265,6 +264,7 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             val methodExpr = callExpr.methodExpression as? JSReferenceExpression ?: return
             val methodName = methodExpr.referenceName ?: return
 
+            val i18nFunctions = I18nFunctionResolver.getFunctions(psiElement.project)
             if (!i18nFunctions.contains(methodName)) return
 
             val args = callExpr.arguments
