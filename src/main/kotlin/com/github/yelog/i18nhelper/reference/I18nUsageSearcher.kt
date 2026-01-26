@@ -98,9 +98,10 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
         consumer: Processor<in PsiReference>
     ) {
         val baseDir = project.guessProjectDir() ?: return
-        val psiManager = PsiManager.getInstance(project)
         val sourceExtensions = listOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs")
 
+        // First, collect all candidate files (without scope check which needs ReadAction)
+        val candidateFiles = mutableListOf<com.intellij.openapi.vfs.VirtualFile>()
         VfsUtil.iterateChildrenRecursively(baseDir, { file ->
             !file.name.startsWith(".") &&
             file.name != "node_modules" &&
@@ -109,12 +110,25 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
             !file.path.contains("/node_modules/")
         }) { file ->
             if (!file.isDirectory && sourceExtensions.contains(file.extension?.lowercase())) {
+                candidateFiles.add(file)
+            }
+            true
+        }
+
+        // Then, filter by scope and process all files in ReadAction
+        com.intellij.openapi.application.ReadAction.run<RuntimeException> {
+            val psiManager = PsiManager.getInstance(project)
+            for (file in candidateFiles) {
+                // Check scope inside ReadAction
+                if (!scope.contains(file)) {
+                    continue
+                }
+
                 val psiFile = psiManager.findFile(file)
-                if (psiFile != null && scope.contains(file)) {
+                if (psiFile != null) {
                     findKeyUsagesInFile(psiFile, key, consumer)
                 }
             }
-            true
         }
     }
 

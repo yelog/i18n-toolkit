@@ -420,8 +420,18 @@ private class I18nSearchEverywhereRenderer(
             entry.file.name
         }
 
-        val document = FileDocumentManager.getInstance().getDocument(entry.file)
-        val lineNumber = document?.getLineNumber(entry.offset)?.plus(1) ?: 0
+        val lineNumber = com.intellij.openapi.application.ReadAction.compute<Int, Throwable> {
+            try {
+                val document = FileDocumentManager.getInstance().getDocument(entry.file)
+                if (document != null && entry.offset >= 0 && entry.offset <= document.textLength) {
+                    document.getLineNumber(entry.offset) + 1
+                } else {
+                    0
+                }
+            } catch (e: Exception) {
+                0
+            }
+        }
         return if (lineNumber > 0) "$relativePath:$lineNumber" else relativePath
     }
 

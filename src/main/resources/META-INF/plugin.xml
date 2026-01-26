@@ -61,6 +61,16 @@
                                    implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
         <codeInsight.inlayProvider language="TypeScript JSX"
                                    implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+
+        <!-- Annotator for highlighting missing i18n keys -->
+        <annotator language="JavaScript"
+                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+        <annotator language="TypeScript"
+                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+        <annotator language="Vue"
+                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+        <annotator language="TypeScript JSX"
+                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
         
         <!-- Reference contributor for Cmd+Click navigation -->
         <psi.referenceContributor language="JavaScript"
@@ -101,6 +111,8 @@
 
         <!-- Find Usages support for i18n keys in translation files -->
         <referencesSearch implementation="com.github.yelog.i18nhelper.reference.I18nUsageSearcher"/>
+        <findUsagesHandlerFactory implementation="com.github.yelog.i18nhelper.usages.I18nFindUsagesHandlerFactory"
+                                  order="first"/>
 
         <!-- Search Everywhere tab for i18n translations -->
         <searchEverywhereContributor implementation="com.github.yelog.i18nhelper.searcheverywhere.I18nSearchEverywhereContributorFactory"/>

@@ -33,6 +33,9 @@ class I18nCacheService(private val project: Project) : Disposable {
         val basePath = project.basePath ?: return
         val translationFiles = I18nDirectoryScanner.scanForTranslationFiles(project)
 
+        // Clear old cache to prevent stale offsets
+        keyToFiles.clear()
+
         // Use ReadAction for all PSI access operations
         val data = ReadAction.compute<TranslationData, RuntimeException> {
             val framework = I18nFrameworkDetector.detect(project)
