@@ -73,9 +73,6 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
                         shortcut.setShortcut(null)
                     }
                 }
-                row {
-                    label(getShortcutText(I18nUiRefresher.SWITCH_LOCALE_ACTION_ID))
-                }
             }
 
             group("Translations Popup") {
@@ -84,9 +81,6 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
                     button("Clear") {
                         popupShortcut.setShortcut(null)
                     }
-                }
-                row {
-                    label(getShortcutText(I18nUiRefresher.TRANSLATIONS_POPUP_ACTION_ID))
                 }
             }
 
@@ -180,11 +174,6 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
         return keymap.getShortcuts(actionId)
             .filterIsInstance<KeyboardShortcut>()
             .firstOrNull()
-    }
-
-    private fun getShortcutText(actionId: String): String {
-        val shortcut = getCurrentKeyboardShortcut(actionId) ?: return "Not set"
-        return "Current: ${KeymapUtil.getShortcutText(shortcut)}"
     }
 
     private fun updateShortcut(actionId: String, field: ShortcutCaptureField?) {

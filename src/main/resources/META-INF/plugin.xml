@@ -137,7 +137,9 @@
                 class="com.github.yelog.i18nhelper.action.I18nTranslationsPopupAction"
                 text="Show I18n Translations"
                 description="Show translations for current i18n key">
-            <keyboard-shortcut keymap="$default" first-keystroke="meta shift I"/>
+            <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift I"/>
+            <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift I"/>
+            <keyboard-shortcut keymap="$default" first-keystroke="control shift I"/>
         </action>
         <action id="I18nHelper.CopyKey"
                 class="com.github.yelog.i18nhelper.action.I18nCopyKeyAction"

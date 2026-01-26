@@ -296,46 +296,28 @@ private class I18nSearchEverywhereRenderer(
         appendWithHighlight(value.key, tokens, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES, selected)
         append("  ", SimpleTextAttributes.REGULAR_ATTRIBUTES)
 
-        // Display translations for each locale
+        // Get display locale from settings
         val settings = I18nSettingsState.getInstance(project)
         val displayLocale = settings.getDisplayLocaleOrNull()
 
-        // Sort locales: display locale first, then alphabetically
-        val sortedLocales = value.translations.keys.sortedWith(compareBy(
-            { if (displayLocale != null && it == displayLocale) 0 else 1 },
-            { it }
-        ))
-
-        var first = true
-        for (locale in sortedLocales) {
-            val entry = value.translations[locale] ?: continue
-
-            if (!first) {
-                append(" | ", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-            }
-            first = false
-
-            // Locale tag
-            append("[", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-            append(locale, SimpleTextAttributes.GRAYED_BOLD_ATTRIBUTES)
-            append("]", SimpleTextAttributes.GRAYED_ATTRIBUTES)
-
-            // Translation value with highlight
-            val truncatedValue = truncate(entry.value, 40)
-            appendWithHighlight(truncatedValue, tokens, SimpleTextAttributes.GRAYED_ATTRIBUTES, selected)
-        }
-
-        // Location info for display locale
+        // Get the translation entry for display locale (or first available)
         val displayEntry = if (displayLocale != null) {
             value.translations[displayLocale] ?: value.translations.values.firstOrNull()
         } else {
-            value.translations.values.firstOrNull()
+            // Prefer zh_CN, zh, en, then first available
+            value.translations["zh_CN"] ?: value.translations["zh"]
+                ?: value.translations["en"] ?: value.translations.values.firstOrNull()
         }
 
         if (displayEntry != null) {
+            // Show translation value
+            val truncatedValue = truncate(displayEntry.value, 50)
+            appendWithHighlight(truncatedValue, tokens, SimpleTextAttributes.GRAYED_ATTRIBUTES, selected)
+
+            // Show file path and line number
             val location = buildLocationText(displayEntry)
             if (location.isNotEmpty()) {
-                append("  ")
+                append("  ", SimpleTextAttributes.REGULAR_ATTRIBUTES)
                 append(location, SimpleTextAttributes.GRAYED_SMALL_ATTRIBUTES)
             }
         }
