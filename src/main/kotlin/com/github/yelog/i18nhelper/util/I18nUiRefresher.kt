@@ -12,6 +12,7 @@ object I18nUiRefresher {
     const val SWITCH_LOCALE_ACTION_ID = "I18nHelper.SwitchLocale"
     const val TRANSLATIONS_POPUP_ACTION_ID = "I18nHelper.ShowTranslationsPopup"
     const val COPY_KEY_ACTION_ID = "I18nHelper.CopyKey"
+    const val NAVIGATE_TO_FILE_ACTION_ID = "I18nHelper.NavigateToFile"
 
     fun refresh(project: Project) {
         // Clear all caches

@@ -6,6 +6,7 @@ import com.github.yelog.i18nhelper.parser.TranslationFileParser
 import com.github.yelog.i18nhelper.scanner.I18nDirectoryScanner
 import com.github.yelog.i18nhelper.util.I18nKeyGenerator
 import com.github.yelog.i18nhelper.util.I18nLocaleUtils
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
@@ -28,42 +29,47 @@ class I18nCacheService(private val project: Project) : Disposable {
 
     fun refresh() {
         thisLogger().info("I18n Helper: Refreshing translation cache for ${project.name}")
-        
-        val framework = I18nFrameworkDetector.detect(project)
-        val data = TranslationData(framework)
-        
-        val translationFiles = I18nDirectoryScanner.scanForTranslationFiles(project)
+
         val basePath = project.basePath ?: return
+        val translationFiles = I18nDirectoryScanner.scanForTranslationFiles(project)
 
-        translationFiles.forEach { file ->
-            try {
-                val pathInfo = I18nKeyGenerator.parseFilePath(file, basePath)
-                
-                val translationFile = TranslationFile(
-                    file = file,
-                    locale = pathInfo.locale,
-                    module = pathInfo.module,
-                    businessUnit = pathInfo.businessUnit,
-                    keyPrefix = pathInfo.keyPrefix
-                )
-                
-                val entries = TranslationFileParser.parse(
-                    project,
-                    file,
-                    pathInfo.keyPrefix,
-                    pathInfo.locale
-                )
+        // Use ReadAction for all PSI access operations
+        val data = ReadAction.compute<TranslationData, RuntimeException> {
+            val framework = I18nFrameworkDetector.detect(project)
+            val result = TranslationData(framework)
 
-                entries.forEach { (key, entry) ->
-                    translationFile.entries[key] = entry
-                    data.addEntry(entry)
-                    keyToFiles.getOrPut(key) { mutableSetOf() }.add(entry)
+            translationFiles.forEach { file ->
+                try {
+                    val pathInfo = I18nKeyGenerator.parseFilePath(file, basePath)
+
+                    val translationFile = TranslationFile(
+                        file = file,
+                        locale = pathInfo.locale,
+                        module = pathInfo.module,
+                        businessUnit = pathInfo.businessUnit,
+                        keyPrefix = pathInfo.keyPrefix
+                    )
+
+                    val entries = TranslationFileParser.parse(
+                        project,
+                        file,
+                        pathInfo.keyPrefix,
+                        pathInfo.locale
+                    )
+
+                    entries.forEach { (key, entry) ->
+                        translationFile.entries[key] = entry
+                        result.addEntry(entry)
+                        keyToFiles.getOrPut(key) { mutableSetOf() }.add(entry)
+                    }
+
+                    result.files.add(translationFile)
+                } catch (e: Exception) {
+                    thisLogger().warn("I18n Helper: Failed to parse ${file.path}", e)
                 }
-
-                data.files.add(translationFile)
-            } catch (e: Exception) {
-                thisLogger().warn("I18n Helper: Failed to parse ${file.path}", e)
             }
+
+            result
         }
 
         translationData = data

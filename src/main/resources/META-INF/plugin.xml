@@ -114,10 +114,18 @@
         <action id="I18nHelper.ShowTranslationsPopup"
                 class="com.github.yelog.i18nhelper.action.I18nTranslationsPopupAction"
                 text="Show I18n Translations"
-                description="Show translations for current i18n key"/>
+                description="Show translations for current i18n key">
+            <keyboard-shortcut keymap="$default" first-keystroke="meta shift I"/>
+        </action>
         <action id="I18nHelper.CopyKey"
                 class="com.github.yelog.i18nhelper.action.I18nCopyKeyAction"
                 text="Copy I18n Key"
                 description="Copy current i18n key"/>
+        <action id="I18nHelper.NavigateToFile"
+                class="com.github.yelog.i18nhelper.action.I18nNavigateToFileAction"
+                text="Navigate to I18n File"
+                description="Navigate to translation file for current i18n key">
+            <keyboard-shortcut keymap="$default" first-keystroke="control J"/>
+        </action>
     </actions>
 </idea-plugin>
