@@ -71,6 +71,16 @@
                    implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
         <annotator language="TypeScript JSX"
                    implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+
+        <!-- Completion for i18n keys -->
+        <completion.contributor language="JavaScript"
+                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+        <completion.contributor language="TypeScript"
+                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+        <completion.contributor language="Vue"
+                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+        <completion.contributor language="TypeScript JSX"
+                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
         
         <!-- Reference contributor for Cmd+Click navigation -->
         <psi.referenceContributor language="JavaScript"
