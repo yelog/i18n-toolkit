@@ -5,14 +5,11 @@ import com.github.yelog.i18nhelper.settings.I18nSettingsState
 import com.github.yelog.i18nhelper.util.I18nFunctionResolver
 import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.codeInsight.completion.*
-import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.openapi.diagnostic.thisLogger
-import com.intellij.patterns.PlatformPatterns
-import com.intellij.util.ProcessingContext
 
 /**
  * Provides auto-completion for i18n keys inside t(), $t(), and other i18n function calls.
@@ -113,9 +110,18 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             return
         }
 
-        // Get the current input text (what user has typed so far)
-        val currentText = parameters.position.text.removeSuffix("IntellijIdeaRulezzz").trim('"', '\'')
-        logger.info("Current input text: '$currentText'")
+        // Calculate the correct prefix from the string literal content
+        // This is more reliable than result.prefixMatcher.prefix which may include text outside the string
+        val stringContent = literalExpression.stringValue ?: ""
+        val cursorOffsetInFile = parameters.offset
+        val literalStartInFile = literalExpression.textRange.startOffset
+        val contentStartInFile = literalStartInFile + 1  // +1 to skip opening quote
+
+        // Calculate how much of the string content is before the cursor
+        val cursorOffsetInContent = (cursorOffsetInFile - contentStartInFile).coerceIn(0, stringContent.length)
+        val currentText = stringContent.substring(0, cursorOffsetInContent)
+
+        logger.info("Current input text: '$currentText', full string: '$stringContent'")
 
         // Get all available keys
         val cacheService = I18nCacheService.getInstance(project)
@@ -138,15 +144,19 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
         // Filter and rank keys based on fuzzy matching
         val rankedKeys = rankKeysByMatch(currentText, allKeys.toList(), namespace)
-        logger.info("Ranked keys count: ${rankedKeys.size}, showing top ${rankedKeys.take(50).size}")
+        logger.info("Ranked keys count: ${rankedKeys.size}")
 
         // Get display locale for showing translations
         val settings = I18nSettingsState.getInstance(project)
         val displayLocale = settings.getDisplayLocaleOrNull()
 
-        // Create completion items
+        // Use a custom prefix matcher that accepts all keys (we do our own fuzzy filtering)
+        // IMPORTANT: Use the original prefix from result to maintain correct popup position
+        val fuzzyResult = result.withPrefixMatcher(I18nFuzzyPrefixMatcher(currentText))
+
+        // Create completion items - no artificial limit, let IntelliJ handle display
         var addedCount = 0
-        for ((key, score) in rankedKeys.take(50)) { // Limit to top 50 results
+        for ((key, score) in rankedKeys) {
             val translations = cacheService.getAllTranslations(key)
 
             // Get the translation value for the display
@@ -169,20 +179,59 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                 .withTypeText(translationValue?.take(50) ?: "", true)
                 .withIcon(com.intellij.icons.AllIcons.Nodes.Property)
                 .withInsertHandler { insertContext, _ ->
-                    // Insert the key inside quotes
+                    // IntelliJ may have already done some insertion/replacement with incorrect offsets.
+                    // We need to find the actual string boundaries and replace the content correctly.
                     val editor = insertContext.editor
                     val document = editor.document
-                    val startOffset = insertContext.startOffset
-                    val tailOffset = insertContext.tailOffset
+                    val text = document.charsSequence
+                    val caretOffset = editor.caretModel.offset
 
-                    // Replace the current text with the selected key
-                    document.replaceString(startOffset, tailOffset, displayKey)
-                    editor.caretModel.moveToOffset(startOffset + displayKey.length)
+                    // Find the opening quote by searching backwards from caret
+                    var quoteStart = caretOffset - 1
+                    while (quoteStart >= 0) {
+                        val c = text[quoteStart]
+                        if (c == '\'' || c == '"') break
+                        // Stop if we hit something that shouldn't be in a string key
+                        if (c == '\n' || c == '\r' || c == '(' || c == ')' || c == '{' || c == '}') {
+                            quoteStart = -1
+                            break
+                        }
+                        quoteStart--
+                    }
+
+                    if (quoteStart < 0) return@withInsertHandler
+
+                    val quoteChar = text[quoteStart]
+
+                    // Find the closing quote by searching forward from caret
+                    var quoteEnd = caretOffset
+                    while (quoteEnd < text.length) {
+                        val c = text[quoteEnd]
+                        if (c == quoteChar) break
+                        // Stop if we hit something that shouldn't be in a string
+                        if (c == '\n' || c == '\r') {
+                            quoteEnd = text.length
+                            break
+                        }
+                        quoteEnd++
+                    }
+
+                    if (quoteEnd >= text.length) return@withInsertHandler
+
+                    // Replace the content between quotes (exclusive of quotes themselves)
+                    val contentStart = quoteStart + 1
+                    val currentContent = text.substring(contentStart, quoteEnd)
+
+                    // Only replace if content is different
+                    if (currentContent != displayKey) {
+                        document.replaceString(contentStart, quoteEnd, displayKey)
+                    }
+                    editor.caretModel.moveToOffset(contentStart + displayKey.length)
                 }
 
             // Add with priority based on match score
             val prioritizedElement = PrioritizedLookupElement.withPriority(lookupElement, score.toDouble())
-            result.addElement(prioritizedElement)
+            fuzzyResult.addElement(prioritizedElement)
             addedCount++
         }
         logger.info("Successfully added $addedCount completion items")
@@ -191,6 +240,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
     /**
      * Rank keys by how well they match the input text.
      * Returns a list of (key, score) pairs sorted by score (higher is better).
+     * All keys are included - matching keys have higher scores.
      */
     private fun rankKeysByMatch(
         input: String,
@@ -198,22 +248,24 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         namespace: String?
     ): List<Pair<String, Int>> {
         if (input.isBlank()) {
-            // If no input, show all keys sorted alphabetically
-            return keys.map { it to 0 }.sortedBy { it.first }
+            // If no input, show all keys sorted alphabetically with base score
+            return keys.map { it to 1 }.sortedBy { it.first }
         }
 
         val inputLower = input.lowercase()
         val inputWords = inputLower.split(Regex("[.\\-_\\s]+")).filter { it.isNotEmpty() }
 
-        return keys.mapNotNull { key ->
+        // Calculate scores for all keys and sort by score (higher first), then alphabetically
+        return keys.map { key ->
             val score = calculateMatchScore(key, inputLower, inputWords, namespace)
-            if (score > 0) key to score else null
-        }.sortedByDescending { it.second }
+            key to score
+        }.sortedWith(compareBy({ -it.second }, { it.first }))
     }
 
     /**
      * Calculate match score for a key.
      * Higher score = better match.
+     * All keys get a base score of 1, matching keys get higher scores.
      */
     private fun calculateMatchScore(
         key: String,
@@ -222,7 +274,8 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         namespace: String?
     ): Int {
         val keyLower = key.lowercase()
-        var score = 0
+        // Base score ensures all keys are included
+        var score = 1
 
         // Remove namespace prefix for matching
         val keyForMatching = if (namespace != null && keyLower.startsWith("$namespace.")) {
@@ -291,5 +344,21 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         }
 
         return score
+    }
+}
+
+/**
+ * Custom PrefixMatcher that accepts all keys.
+ * We handle fuzzy matching ourselves in rankKeysByMatch.
+ */
+private class I18nFuzzyPrefixMatcher(prefix: String) : PrefixMatcher(prefix) {
+
+    override fun prefixMatches(name: String): Boolean {
+        // Accept all keys - our ranking logic handles relevance
+        return true
+    }
+
+    override fun cloneWithPrefix(prefix: String): PrefixMatcher {
+        return I18nFuzzyPrefixMatcher(prefix)
     }
 }
