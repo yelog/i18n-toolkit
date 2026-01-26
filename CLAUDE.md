@@ -38,7 +38,20 @@ Always use the Gradle wrapper. JDK 21 required.
 | `I18nLineMarkerProvider` | Cross-locale navigation in translation files |
 | `I18nFoldingBuilder` | Code folding for i18n calls |
 | `I18nSettingsConfigurable` | Plugin settings UI |
-| `I18nSwitchLocaleAction` | Action to cycle display language |
+| `I18nKeyAnnotator` | Highlights missing i18n keys as warnings |
+| `I18nKeyCompletionContributor` | Auto-completion for i18n keys in code |
+| `I18nDocumentationProvider` | Quick Definition/Documentation (Cmd+hover) for i18n keys |
+| `I18nGotoDeclarationHandler` | Handles navigation from folded regions |
+| `I18nSearchEverywhereContributor` | Adds "I18n" tab to Search Everywhere (Enter=copy, Ctrl+Enter=navigate) |
+
+### Actions
+
+| Action | Shortcut | Purpose |
+|--------|----------|---------|
+| `I18nSwitchLocaleAction` | - | Cycle display language for inline previews |
+| `I18nTranslationsPopupAction` | Cmd+Shift+I (Mac) | Show all translations for current key |
+| `I18nCopyKeyAction` | - | Copy current i18n key to clipboard |
+| `I18nNavigateToFileAction` | Ctrl+J (Mac) | Navigate to translation file for current key |
 
 ### Key Models (I18nModels.kt)
 
@@ -61,8 +74,21 @@ Path-based key prefixes enable modular translation organization:
 
 **File scanning**: Skip `node_modules`, `dist`, `build`, `.git` directories.
 
+**Settings**: Project settings stored via `I18nSettingsState` - supports custom i18n functions, display locale, framework override.
+
+**Framework Detection**: `I18nFrameworkDetector` auto-detects from `package.json` (JS/TS) or build files (Spring Boot/Java).
+
+## Dependencies
+
+External libraries (see build.gradle.kts):
+- `snakeyaml:2.2` - YAML parsing
+- `toml4j:0.7.2` - TOML parsing
+
 ## Important Notes
 
 - Preserve `<!-- Plugin description -->` markers in README.md - parsed by build
+- Plugin supports dynamic loading (no IDE restart required) via `I18nDynamicPluginListener`
+- All language extensions (JS/TS/Vue/TSX) are registered separately for each feature
 - Run `./gradlew check` before committing
 - Run `./gradlew verifyPlugin` when changing plugin.xml or dependencies
+- UI testing sandbox: `./gradlew runIdeForUiTests` (robot-server on port 8082)
