@@ -143,7 +143,7 @@
         <searchEverywhereContributor implementation="com.github.yelog.i18nhelper.searcheverywhere.I18nSearchEverywhereContributorFactory"/>
 
         <!-- Status bar widget for i18n display language -->
-        <statusBarWidgetFactory implementation="com.github.yelog.i18nhelper.statusbar.I18nStatusBarWidgetFactory" order="before memoryIndicator"/>
+        <statusBarWidgetFactory id="I18nDisplayLanguage" implementation="com.github.yelog.i18nhelper.statusbar.I18nStatusBarWidgetFactory" order="before memoryIndicator"/>
         <notificationGroup id="I18n Helper" displayType="BALLOON"/>
     </extensions>
 
