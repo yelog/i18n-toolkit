@@ -122,6 +122,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         // Calculate how much of the string content is before the cursor
         val cursorOffsetInContent = (cursorOffsetInFile - contentStartInFile).coerceIn(0, stringContent.length)
         val currentText = stringContent.substring(0, cursorOffsetInContent)
+        val currentTextLower = currentText.lowercase()
 
         logger.info("Current input text: '$currentText', full string: '$stringContent'")
 
@@ -189,6 +190,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         var addedCount = 0
         for ((key, _) in rankedKeys) {
             val translationValue = typeTexts[key]
+            val translationDisplay = translationValue?.take(50) ?: ""
 
             // Determine the key to show (remove namespace prefix if applicable)
             val displayKey = if (namespace != null && key.startsWith("$namespace.")) {
@@ -196,10 +198,11 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             } else {
                 key
             }
+            val displayKeyLower = displayKey.lowercase()
 
             val lookupElement = LookupElementBuilder.create(key, displayKey)  // Use key as lookupObject for weigher
                 .withPresentableText(displayKey)
-                .withTypeText(translationValue?.take(50) ?: "", true)
+                .withTypeText(translationDisplay, true)
                 .withIcon(com.intellij.icons.AllIcons.Nodes.Property)
                 .withInsertHandler { insertContext, _ ->
                     // IntelliJ may have already done some insertion/replacement with incorrect offsets.
@@ -251,6 +254,18 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                     }
                     editor.caretModel.moveToOffset(contentStart + displayKey.length)
                 }
+
+            val shouldHighlightTranslation = translationDisplay.isNotBlank() &&
+                currentTextLower.isNotBlank() &&
+                !displayKeyLower.contains(currentTextLower) &&
+                hasTranslationMatch(translationDisplay, currentText)
+
+            if (shouldHighlightTranslation) {
+                lookupElement.putUserData(
+                    TRANSLATION_HIGHLIGHT_KEY,
+                    TranslationHighlightInfo(currentText)
+                )
+            }
 
             // Add element to the sorted result
             sortedResult.addElement(lookupElement)
@@ -435,6 +450,17 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         return score
     }
 }
+
+private fun hasTranslationMatch(text: String, input: String): Boolean {
+    if (text.isBlank() || input.isBlank()) return false
+    val textLower = text.lowercase()
+    val inputLower = input.lowercase()
+    if (textLower.contains(inputLower)) return true
+    val words = inputLower.split(Regex("[\\s\\p{Punct}]+")).filter { it.isNotEmpty() }
+    if (words.isEmpty()) return false
+    return words.all { textLower.contains(it) }
+}
+
 
 /**
  * Custom PrefixMatcher that accepts all keys.

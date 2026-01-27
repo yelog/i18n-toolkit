@@ -92,6 +92,9 @@
                                 implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
         <completion.contributor language="TypeScript JSX"
                                 implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+
+        <!-- Lookup renderer customization for translation highlight -->
+        <lookup.customizer implementationClass="com.github.yelog.i18nhelper.completion.I18nLookupCustomizer"/>
         
         <!-- Reference contributor for Cmd+Click navigation -->
         <psi.referenceContributor language="JavaScript"
