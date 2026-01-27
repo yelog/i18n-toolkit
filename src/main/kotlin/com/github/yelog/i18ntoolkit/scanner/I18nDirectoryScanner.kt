@@ -10,6 +10,8 @@ import com.intellij.openapi.vfs.VfsUtil
 
 object I18nDirectoryScanner {
 
+    private val excludedDirNames = setOf("node_modules", "dist", "build")
+
     fun scanForTranslationFiles(project: Project): List<VirtualFile> {
         val baseDir = project.guessProjectDir() ?: return emptyList()
         val translationFiles = mutableListOf<VirtualFile>()
@@ -24,13 +26,7 @@ object I18nDirectoryScanner {
     fun findI18nDirectories(root: VirtualFile): List<VirtualFile> {
         val directories = mutableListOf<VirtualFile>()
         
-        VfsUtil.iterateChildrenRecursively(root, { file ->
-            !file.name.startsWith(".") && 
-            file.name != "node_modules" && 
-            file.name != "dist" && 
-            file.name != "build" &&
-            file.name != ".git"
-        }) { file ->
+        VfsUtil.iterateChildrenRecursively(root, ::shouldTraverse) { file ->
             if (file.isDirectory && I18nDirectories.STANDARD_DIRS.contains(file.name.lowercase())) {
                 directories.add(file)
             }
@@ -41,7 +37,7 @@ object I18nDirectoryScanner {
     }
 
     private fun collectTranslationFiles(directory: VirtualFile, result: MutableList<VirtualFile>) {
-        VfsUtil.iterateChildrenRecursively(directory, null) { file ->
+        VfsUtil.iterateChildrenRecursively(directory, ::shouldTraverse) { file ->
             if (!file.isDirectory) {
                 val ext = file.extension?.lowercase()
                 if (ext != null && TranslationFileType.allExtensions().contains(ext)) {
@@ -50,6 +46,13 @@ object I18nDirectoryScanner {
             }
             true
         }
+    }
+
+    private fun shouldTraverse(file: VirtualFile): Boolean {
+        if (!file.isDirectory) return true
+        val name = file.name
+        if (name.startsWith(".")) return false
+        return name.lowercase() !in excludedDirNames
     }
 
     fun isTranslationFile(file: VirtualFile): Boolean {
