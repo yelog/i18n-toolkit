@@ -5,7 +5,9 @@ import com.github.yelog.i18nhelper.settings.I18nSettingsState
 import com.github.yelog.i18nhelper.util.I18nFunctionResolver
 import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.codeInsight.completion.*
+import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.intellij.codeInsight.lookup.LookupElementWeigher
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
@@ -154,6 +156,18 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         // IMPORTANT: Use the original prefix from result to maintain correct popup position
         val fuzzyResult = result.withPrefixMatcher(I18nFuzzyPrefixMatcher(currentText))
 
+        // Create a map to store scores for each key (used by custom sorter)
+        val keyScores = mutableMapOf<String, Int>()
+        for ((key, score) in rankedKeys) {
+            keyScores[key] = score
+        }
+
+        // Use a custom sorter that respects our score-based ordering
+        val sorter = CompletionSorter.emptySorter()
+            .weigh(I18nKeyWeigher(keyScores))
+
+        val sortedResult = fuzzyResult.withRelevanceSorter(sorter)
+
         // Create completion items - no artificial limit, let IntelliJ handle display
         var addedCount = 0
         for ((key, score) in rankedKeys) {
@@ -173,7 +187,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                 key
             }
 
-            val lookupElement = LookupElementBuilder.create(displayKey)
+            val lookupElement = LookupElementBuilder.create(key, displayKey)  // Use key as lookupObject for weigher
                 .withPresentableText(displayKey)
                 .withTailText(" (${translations.size} locales)", true)
                 .withTypeText(translationValue?.take(50) ?: "", true)
@@ -229,9 +243,8 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                     editor.caretModel.moveToOffset(contentStart + displayKey.length)
                 }
 
-            // Add with priority based on match score
-            val prioritizedElement = PrioritizedLookupElement.withPriority(lookupElement, score.toDouble())
-            fuzzyResult.addElement(prioritizedElement)
+            // Add element to the sorted result
+            sortedResult.addElement(lookupElement)
             addedCount++
         }
         logger.info("Successfully added $addedCount completion items")
@@ -324,6 +337,17 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             if (inOrder) {
                 score += 500
             }
+
+            // Extra bonus if key starts with the first input word
+            if (inputWords.isNotEmpty() && keyWords.isNotEmpty()) {
+                val firstInputWord = inputWords.first()
+                val firstKeyWord = keyWords.first()
+                if (firstKeyWord.startsWith(firstInputWord)) {
+                    score += 3000  // Strong bonus for matching the first segment
+                } else if (firstKeyWord.contains(firstInputWord)) {
+                    score += 1000  // Moderate bonus if first key word contains the input
+                }
+            }
         }
 
         // Acronym match (e.g., "un" matches "user.name")
@@ -360,5 +384,20 @@ private class I18nFuzzyPrefixMatcher(prefix: String) : PrefixMatcher(prefix) {
 
     override fun cloneWithPrefix(prefix: String): PrefixMatcher {
         return I18nFuzzyPrefixMatcher(prefix)
+    }
+}
+
+/**
+ * Custom weigher that sorts completion items by our calculated scores.
+ * Higher score = better match = should appear first (lower weight).
+ */
+private class I18nKeyWeigher(private val keyScores: Map<String, Int>) : LookupElementWeigher("i18nKeyRelevance") {
+
+    override fun weigh(element: LookupElement): Comparable<*> {
+        // The lookupObject is the original key (set in LookupElementBuilder.create(key, displayKey))
+        val key = element.`object` as? String ?: return Int.MAX_VALUE
+        val score = keyScores[key] ?: 0
+        // Return negative score because lower weight = higher priority in sorting
+        return -score
     }
 }
