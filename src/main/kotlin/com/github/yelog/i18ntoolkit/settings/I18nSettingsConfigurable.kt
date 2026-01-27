@@ -15,6 +15,7 @@ import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.*
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.util.I18nLocaleUtils
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
 
 class I18nSettingsConfigurable(private val project: Project) : Configurable {
@@ -150,7 +151,9 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
         val locales = cacheService.getAvailableLocales().sorted()
         localeModel.replaceAll(locales)
         if (displayLocale !in locales && locales.isNotEmpty()) {
-            displayLocale = locales.first()
+            val normalized = I18nLocaleUtils.normalizeLocale(displayLocale)
+            val matched = locales.firstOrNull { I18nLocaleUtils.normalizeLocale(it) == normalized }
+            displayLocale = matched ?: locales.first()
         }
     }
 

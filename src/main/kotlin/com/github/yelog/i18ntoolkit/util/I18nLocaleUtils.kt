@@ -27,6 +27,24 @@ object I18nLocaleUtils {
         }
     }
 
+    fun formatLocaleForDisplay(name: String): String {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return trimmed
+        return if (trimmed.contains('-') || trimmed.contains('_')) {
+            trimmed
+        } else {
+            trimmed.lowercase()
+        }
+    }
+
+    fun chooseDisplayLocale(locales: Collection<String>): String {
+        if (locales.isEmpty()) return ""
+        val preferred = locales.firstOrNull { it.contains('-') }
+            ?: locales.firstOrNull { it.contains('_') }
+            ?: locales.first()
+        return formatLocaleForDisplay(preferred)
+    }
+
     fun buildLocaleCandidates(locale: String): List<String> {
         if (locale.isBlank()) return emptyList()
         val normalized = normalizeLocale(locale)

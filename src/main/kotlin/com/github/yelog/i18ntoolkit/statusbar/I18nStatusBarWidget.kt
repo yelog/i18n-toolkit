@@ -2,6 +2,7 @@ package com.github.yelog.i18ntoolkit.statusbar
 
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
+import com.github.yelog.i18ntoolkit.util.I18nLocaleUtils
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
 import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.ApplicationManager
@@ -65,7 +66,7 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
     private fun getCurrentDisplayText(): String {
         val settings = I18nSettingsState.getInstance(project)
         val displayLocale = settings.getDisplayLocaleOrNull()
-        return displayLocale ?: EMPTY_LOCALE_TEXT
+        return displayLocale?.let { I18nLocaleUtils.formatLocaleForDisplay(it) } ?: EMPTY_LOCALE_TEXT
     }
 
     private fun showPopup(component: Component) {
@@ -152,7 +153,12 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
 
             override fun getDefaultOptionIndex(): Int {
                 // Find the index of current locale in all items
-                val currentLocaleItem = localeItems.find { it.locale == currentLocale }
+                val currentLocaleItem = if (currentLocale == null) {
+                    null
+                } else {
+                    val normalized = I18nLocaleUtils.normalizeLocale(currentLocale)
+                    localeItems.find { I18nLocaleUtils.normalizeLocale(it.locale) == normalized }
+                }
                 return if (currentLocaleItem != null) {
                     val index = allItems.indexOf(currentLocaleItem)
                     if (index >= 0) index else 1

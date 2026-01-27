@@ -61,6 +61,10 @@ class I18nCacheService(private val project: Project) : Disposable {
                         pathInfo.locale
                     )
 
+                    if (entries.isEmpty()) {
+                        return@forEach
+                    }
+
                     entries.forEach { (key, entry) ->
                         translationFile.entries[key] = entry
                         result.addEntry(entry)
@@ -114,13 +118,17 @@ class I18nCacheService(private val project: Project) : Disposable {
     }
 
     fun getAvailableLocales(): List<String> {
-        return translationData?.files
+        val locales = translationData?.files
             ?.map { it.locale }
             ?.filter { I18nLocaleUtils.isLocaleName(it) }
-            ?.map { I18nLocaleUtils.normalizeLocale(it) }
-            ?.distinct()
-            ?.sorted()
             ?: emptyList()
+
+        return locales
+            .groupBy { I18nLocaleUtils.normalizeLocale(it) }
+            .values
+            .map { I18nLocaleUtils.chooseDisplayLocale(it) }
+            .filter { it.isNotBlank() }
+            .sorted()
     }
 
     fun getEntriesForKey(key: String): Set<TranslationEntry> {
