@@ -369,23 +369,38 @@ class CreateI18nKeyQuickFix(
                     }
                 }
 
-                // Check if there's existing content before the closing brace
-                val beforeBrace = content.substring(0, insertBrace).trimEnd()
-                val needsComma = beforeBrace.isNotEmpty() && !beforeBrace.endsWith("{") && !beforeBrace.endsWith(",")
+                // Find the last non-whitespace character before the closing brace
+                var lastContentPos = insertBrace - 1
+                while (lastContentPos >= searchStart && content[lastContentPos].isWhitespace()) {
+                    lastContentPos--
+                }
 
-                val textToInsert = (if (needsComma) "," else "") + "\n" + propertyText
+                val needsComma = lastContentPos >= searchStart &&
+                        content[lastContentPos] != '{' && content[lastContentPos] != ','
 
-                document.insertString(insertBrace, textToInsert)
+                // Indent for the closing brace of the current scope
+                val closingBraceIndent = "  ".repeat(existingDepth)
+
+                val textToInsert = buildString {
+                    if (needsComma) append(",")
+                    append("\n")
+                    append(propertyText)
+                    append("\n")
+                    append(closingBraceIndent)
+                }
+
+                // Replace whitespace span between last content and closing brace
+                val replaceStart = lastContentPos + 1
+                document.replaceString(replaceStart, insertBrace, textToInsert)
                 PsiDocumentManager.getInstance(project).commitDocument(document)
 
                 // Return offset of the opening quote of the empty value
                 val valueKeyword = remainingParts.last() + ": '"
-                val insertedText = textToInsert
-                val valuePos = insertedText.lastIndexOf(valueKeyword)
+                val valuePos = textToInsert.lastIndexOf(valueKeyword)
                 if (valuePos != -1) {
-                    insertBrace + valuePos + valueKeyword.length - 1
+                    replaceStart + valuePos + valueKeyword.length - 1
                 } else {
-                    insertBrace
+                    replaceStart
                 }
             } catch (e: Exception) {
                 null
