@@ -126,6 +126,9 @@
 
         <!-- Search Everywhere tab for i18n translations -->
         <searchEverywhereContributor implementation="com.github.yelog.i18nhelper.searcheverywhere.I18nSearchEverywhereContributorFactory"/>
+
+        <!-- Status bar widget for i18n display language -->
+        <statusBarWidgetFactory implementation="com.github.yelog.i18nhelper.statusbar.I18nStatusBarWidgetFactory" order="before memoryIndicator"/>
     </extensions>
 
     <actions>

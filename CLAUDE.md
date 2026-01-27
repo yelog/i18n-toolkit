@@ -49,9 +49,15 @@ Always use the Gradle wrapper. JDK 21 required.
 | Action | Shortcut | Purpose |
 |--------|----------|---------|
 | `I18nSwitchLocaleAction` | - | Cycle display language for inline previews |
-| `I18nTranslationsPopupAction` | Cmd+Shift+I (Mac) | Show all translations for current key |
+| `I18nTranslationsPopupAction` | Cmd+Shift+I (Mac), Ctrl+Shift+I (Win/Linux) | Show all translations for current key |
 | `I18nCopyKeyAction` | - | Copy current i18n key to clipboard |
 | `I18nNavigateToFileAction` | Ctrl+J (Mac) | Navigate to translation file for current key |
+
+### Status Bar
+
+- `I18nStatusBarWidget` - Displays current display language in status bar (right side, before memory indicator)
+  - Click to show dropdown menu for switching language
+  - Automatically updates when language is changed via settings or actions
 
 ### Key Models (I18nModels.kt)
 

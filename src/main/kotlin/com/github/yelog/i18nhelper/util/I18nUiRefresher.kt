@@ -6,6 +6,7 @@ import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.wm.WindowManager
 import com.intellij.util.FileContentUtil
 
 object I18nUiRefresher {
@@ -13,6 +14,7 @@ object I18nUiRefresher {
     const val TRANSLATIONS_POPUP_ACTION_ID = "I18nHelper.ShowTranslationsPopup"
     const val COPY_KEY_ACTION_ID = "I18nHelper.CopyKey"
     const val NAVIGATE_TO_FILE_ACTION_ID = "I18nHelper.NavigateToFile"
+    const val STATUS_BAR_WIDGET_ID = "I18nDisplayLanguage"
 
     fun refresh(project: Project) {
         // Clear all caches
@@ -31,6 +33,14 @@ object I18nUiRefresher {
 
             // Also restart daemon for good measure
             DaemonCodeAnalyzer.getInstance(project).restart()
+
+            // Update status bar widget
+            updateStatusBarWidget(project)
         }
+    }
+
+    private fun updateStatusBarWidget(project: Project) {
+        val statusBar = WindowManager.getInstance().getStatusBar(project)
+        statusBar?.updateWidget(STATUS_BAR_WIDGET_ID)
     }
 }
