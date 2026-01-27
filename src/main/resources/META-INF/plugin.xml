@@ -38,6 +38,17 @@
         <!-- Goto declaration handler for Cmd+Click on folded regions -->
         <gotoDeclarationHandler implementation="com.github.yelog.i18nhelper.navigation.I18nGotoDeclarationHandler" order="first"/>
 
+        <!-- Goto implementation support for i18n keys -->
+        <definitionsScopedSearch implementation="com.github.yelog.i18nhelper.navigation.I18nDefinitionsScopedSearchExecutor"/>
+        <targetElementEvaluator language="JavaScript"
+                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+        <targetElementEvaluator language="TypeScript"
+                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+        <targetElementEvaluator language="Vue"
+                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+        <targetElementEvaluator language="TypeScript JSX"
+                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+
         <!-- Documentation provider for Quick Definition/Documentation on i18n keys -->
         <lang.documentationProvider language="JavaScript"
                                     implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"

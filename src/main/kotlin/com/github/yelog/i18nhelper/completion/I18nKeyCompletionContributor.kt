@@ -144,13 +144,30 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             null
         }
 
-        // Filter and rank keys based on fuzzy matching
-        val rankedKeys = rankKeysByMatch(currentText, allKeys.toList(), namespace)
-        logger.info("Ranked keys count: ${rankedKeys.size}")
-
-        // Get display locale for showing translations
+        // Get display locale for showing translations and matching
         val settings = I18nSettingsState.getInstance(project)
         val displayLocale = settings.getDisplayLocaleOrNull()
+
+        // Precompute display translations for fuzzy matching (display locale only)
+        val displayTranslations = mutableMapOf<String, String?>()
+        val typeTexts = mutableMapOf<String, String?>()
+        for (key in allKeys) {
+            val displayTranslation = if (displayLocale != null) {
+                cacheService.getTranslationStrict(key, displayLocale)?.value
+            } else {
+                null
+            }
+            displayTranslations[key] = displayTranslation
+            typeTexts[key] = displayTranslation ?: cacheService.getTranslation(key)?.value
+        }
+
+        // Filter and rank keys based on fuzzy matching (key + display translation)
+        val rankedKeys = rankKeysByMatch(
+            currentText,
+            allKeys.toList(),
+            namespace
+        ) { key -> displayTranslations[key] }
+        logger.info("Ranked keys count: ${rankedKeys.size}")
 
         // Use a custom prefix matcher that accepts all keys (we do our own fuzzy filtering)
         // IMPORTANT: Use the original prefix from result to maintain correct popup position
@@ -170,15 +187,8 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
         // Create completion items - no artificial limit, let IntelliJ handle display
         var addedCount = 0
-        for ((key, score) in rankedKeys) {
-            val translations = cacheService.getAllTranslations(key)
-
-            // Get the translation value for the display
-            val translationValue = if (displayLocale != null) {
-                translations[displayLocale]?.value
-            } else {
-                translations.values.firstOrNull()?.value
-            }
+        for ((key, _) in rankedKeys) {
+            val translationValue = typeTexts[key]
 
             // Determine the key to show (remove namespace prefix if applicable)
             val displayKey = if (namespace != null && key.startsWith("$namespace.")) {
@@ -189,7 +199,6 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
             val lookupElement = LookupElementBuilder.create(key, displayKey)  // Use key as lookupObject for weigher
                 .withPresentableText(displayKey)
-                .withTailText(" (${translations.size} locales)", true)
                 .withTypeText(translationValue?.take(50) ?: "", true)
                 .withIcon(com.intellij.icons.AllIcons.Nodes.Property)
                 .withInsertHandler { insertContext, _ ->
@@ -258,7 +267,8 @@ class I18nKeyCompletionContributor : CompletionContributor() {
     private fun rankKeysByMatch(
         input: String,
         keys: List<String>,
-        namespace: String?
+        namespace: String?,
+        translationProvider: (String) -> String?
     ): List<Pair<String, Int>> {
         if (input.isBlank()) {
             // If no input, show all keys sorted alphabetically with base score
@@ -266,11 +276,20 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         }
 
         val inputLower = input.lowercase()
-        val inputWords = inputLower.split(Regex("[.\\-_\\s]+")).filter { it.isNotEmpty() }
+        val inputKeyWords = inputLower.split(Regex("[.\\-_\\s]+")).filter { it.isNotEmpty() }
+        val inputTranslationWords = inputLower.split(Regex("[\\s\\p{Punct}]+")).filter { it.isNotEmpty() }
 
         // Calculate scores for all keys and sort by score (higher first), then alphabetically
         return keys.map { key ->
-            val score = calculateMatchScore(key, inputLower, inputWords, namespace)
+            val translation = translationProvider(key)
+            val score = calculateMatchScore(
+                key,
+                inputLower,
+                inputKeyWords,
+                inputTranslationWords,
+                namespace,
+                translation
+            )
             key to score
         }.sortedWith(compareBy({ -it.second }, { it.first }))
     }
@@ -283,8 +302,10 @@ class I18nKeyCompletionContributor : CompletionContributor() {
     private fun calculateMatchScore(
         key: String,
         inputLower: String,
-        inputWords: List<String>,
-        namespace: String?
+        inputKeyWords: List<String>,
+        inputTranslationWords: List<String>,
+        namespace: String?,
+        translation: String?
     ): Int {
         val keyLower = key.lowercase()
         // Base score ensures all keys are included
@@ -317,7 +338,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
         // Fuzzy match: all input words appear in key
         val keyWords = keyForMatching.split(Regex("[.\\-_]")).filter { it.isNotEmpty() }
-        val allWordsMatch = inputWords.all { inputWord ->
+        val allWordsMatch = inputKeyWords.all { inputWord ->
             keyWords.any { it.contains(inputWord) }
         }
 
@@ -326,7 +347,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             // Bonus if words are in the same order
             var lastIndex = -1
             var inOrder = true
-            for (inputWord in inputWords) {
+            for (inputWord in inputKeyWords) {
                 val index = keyWords.indexOfFirst { it.contains(inputWord) }
                 if (index <= lastIndex) {
                     inOrder = false
@@ -339,8 +360,8 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             }
 
             // Extra bonus if key starts with the first input word
-            if (inputWords.isNotEmpty() && keyWords.isNotEmpty()) {
-                val firstInputWord = inputWords.first()
+            if (inputKeyWords.isNotEmpty() && keyWords.isNotEmpty()) {
+                val firstInputWord = inputKeyWords.first()
                 val firstKeyWord = keyWords.first()
                 if (firstKeyWord.startsWith(firstInputWord)) {
                     score += 3000  // Strong bonus for matching the first segment
@@ -365,6 +386,50 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         // Bonus if in the current namespace
         if (namespace != null && key.startsWith("$namespace.")) {
             score += 1500
+        }
+
+        // Add translation match score for display locale (if available)
+        if (!translation.isNullOrBlank()) {
+            score += calculateTranslationMatchScore(translation, inputLower, inputTranslationWords)
+        }
+
+        return score
+    }
+
+    private fun calculateTranslationMatchScore(
+        translation: String,
+        inputLower: String,
+        inputWords: List<String>
+    ): Int {
+        if (inputLower.isBlank()) return 0
+
+        val translationLower = translation.lowercase()
+        var score = 0
+
+        if (translationLower == inputLower) {
+            score += 6000
+        }
+
+        if (translationLower.startsWith(inputLower)) {
+            score += 3000
+        }
+
+        if (translationLower.contains(inputLower)) {
+            score += 1500
+            val position = translationLower.indexOf(inputLower)
+            score += (80 - position).coerceAtLeast(0)
+        }
+
+        if (inputWords.isNotEmpty()) {
+            val translationWords = translationLower
+                .split(Regex("[\\s\\p{Punct}]+"))
+                .filter { it.isNotEmpty() }
+            val allWordsMatch = inputWords.all { inputWord ->
+                translationWords.any { it.contains(inputWord) } || translationLower.contains(inputWord)
+            }
+            if (allWordsMatch) {
+                score += 800
+            }
         }
 
         return score
