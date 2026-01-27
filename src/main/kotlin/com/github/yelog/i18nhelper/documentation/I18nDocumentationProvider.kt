@@ -1,6 +1,7 @@
 package com.github.yelog.i18nhelper.documentation
 
 import com.github.yelog.i18nhelper.service.I18nCacheService
+import com.github.yelog.i18nhelper.settings.I18nSettingsState
 import com.github.yelog.i18nhelper.util.I18nNamespaceResolver
 import com.intellij.lang.documentation.AbstractDocumentationProvider
 import com.intellij.lang.documentation.DocumentationMarkup
@@ -25,20 +26,46 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
         val (fullKey, partialKey) = extractI18nKeys(target) ?: return null
 
         val cacheService = I18nCacheService.getInstance(target.project)
-        // Try full key first, then fallback to partial key
-        var translations = cacheService.getAllTranslations(fullKey)
-        val displayKey = if (translations.isNotEmpty()) {
-            fullKey
-        } else if (fullKey != partialKey) {
-            translations = cacheService.getAllTranslations(partialKey)
-            partialKey
+        val settings = I18nSettingsState.getInstance(target.project)
+        val locale = settings.getDisplayLocaleOrNull()
+
+        // Determine which key to use and get translations
+        val (displayKey, translations) = if (locale != null) {
+            // With display locale set, try to get strict translation
+            val fullTranslation = cacheService.getTranslationStrict(fullKey, locale)
+            val partialTranslation = cacheService.getTranslationStrict(partialKey, locale)
+
+            when {
+                fullTranslation != null -> Pair(fullKey, mapOf(locale to fullTranslation))
+                partialTranslation != null -> Pair(partialKey, mapOf(locale to partialTranslation))
+                else -> {
+                    // Check if key exists in any locale
+                    val allFullTranslations = cacheService.getAllTranslations(fullKey)
+                    val allPartialTranslations = cacheService.getAllTranslations(partialKey)
+                    when {
+                        allFullTranslations.isNotEmpty() -> Pair(fullKey, emptyMap<String, com.github.yelog.i18nhelper.model.TranslationEntry>())
+                        allPartialTranslations.isNotEmpty() -> Pair(partialKey, emptyMap<String, com.github.yelog.i18nhelper.model.TranslationEntry>())
+                        else -> return null
+                    }
+                }
+            }
         } else {
-            fullKey
+            // No display locale set, show all translations
+            var allTranslations = cacheService.getAllTranslations(fullKey)
+            val key = if (allTranslations.isNotEmpty()) {
+                fullKey
+            } else if (fullKey != partialKey) {
+                allTranslations = cacheService.getAllTranslations(partialKey)
+                partialKey
+            } else {
+                fullKey
+            }
+
+            if (allTranslations.isEmpty()) return null
+            Pair(key, allTranslations)
         }
 
-        if (translations.isEmpty()) return null
-
-        return buildDocumentation(displayKey, translations, target)
+        return buildDocumentation(displayKey, translations, target, locale)
     }
 
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {
@@ -46,27 +73,59 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
         val (fullKey, partialKey) = extractI18nKeys(target) ?: return null
 
         val cacheService = I18nCacheService.getInstance(target.project)
-        // Try full key first, then fallback to partial key
-        var translations = cacheService.getAllTranslations(fullKey)
-        val displayKey = if (translations.isNotEmpty()) {
-            fullKey
-        } else if (fullKey != partialKey) {
-            translations = cacheService.getAllTranslations(partialKey)
-            partialKey
-        } else {
-            fullKey
-        }
+        val settings = I18nSettingsState.getInstance(target.project)
+        val locale = settings.getDisplayLocaleOrNull()
 
-        if (translations.isEmpty()) return null
+        // Determine which key to use and get translations
+        val (displayKey, translations) = if (locale != null) {
+            // With display locale set, try to get strict translation
+            val fullTranslation = cacheService.getTranslationStrict(fullKey, locale)
+            val partialTranslation = cacheService.getTranslationStrict(partialKey, locale)
+
+            when {
+                fullTranslation != null -> Pair(fullKey, mapOf(locale to fullTranslation))
+                partialTranslation != null -> Pair(partialKey, mapOf(locale to partialTranslation))
+                else -> {
+                    // Check if key exists in any locale
+                    val allFullTranslations = cacheService.getAllTranslations(fullKey)
+                    val allPartialTranslations = cacheService.getAllTranslations(partialKey)
+                    when {
+                        allFullTranslations.isNotEmpty() -> Pair(fullKey, emptyMap<String, com.github.yelog.i18nhelper.model.TranslationEntry>())
+                        allPartialTranslations.isNotEmpty() -> Pair(partialKey, emptyMap<String, com.github.yelog.i18nhelper.model.TranslationEntry>())
+                        else -> return null
+                    }
+                }
+            }
+        } else {
+            // No display locale set, show all translations
+            var allTranslations = cacheService.getAllTranslations(fullKey)
+            val key = if (allTranslations.isNotEmpty()) {
+                fullKey
+            } else if (fullKey != partialKey) {
+                allTranslations = cacheService.getAllTranslations(partialKey)
+                partialKey
+            } else {
+                fullKey
+            }
+
+            if (allTranslations.isEmpty()) return null
+            Pair(key, allTranslations)
+        }
 
         // Quick navigate info - shorter format
         val sb = StringBuilder()
         sb.append("<b>i18n:</b> <code>$displayKey</code>")
-        translations.entries.sortedBy { it.key }.take(3).forEach { (locale, entry) ->
-            sb.append("<br/><b>$locale:</b> ${escapeHtml(truncate(entry.value, 40))}")
-        }
-        if (translations.size > 3) {
-            sb.append("<br/><i>... and ${translations.size - 3} more</i>")
+
+        if (translations.isEmpty() && locale != null) {
+            // Show warning for missing translation
+            sb.append("<br/><b>⚠ Missing translation for '$locale'</b>")
+        } else {
+            translations.entries.sortedBy { it.key }.take(3).forEach { (loc, entry) ->
+                sb.append("<br/><b>$loc:</b> ${escapeHtml(truncate(entry.value, 40))}")
+            }
+            if (translations.size > 3) {
+                sb.append("<br/><i>... and ${translations.size - 3} more</i>")
+            }
         }
         return sb.toString()
     }
@@ -124,7 +183,8 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
     private fun buildDocumentation(
         key: String,
         translations: Map<String, com.github.yelog.i18nhelper.model.TranslationEntry>,
-        context: PsiElement
+        context: PsiElement,
+        displayLocale: String?
     ): String {
         val sb = StringBuilder()
 
@@ -137,20 +197,30 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
         // Content section - translations list
         sb.append(DocumentationMarkup.CONTENT_START)
 
-        translations.entries.sortedBy { it.key }.forEach { (locale, entry) ->
-            val fileName = getShortFilePath(entry, context)
-            val lineNumber = getLineNumber(entry, context)
-
-            sb.append("<p style='margin: 6px 0;'>")
-            sb.append("<b><code>").append(locale).append("</code></b>")
-            sb.append("&nbsp;&nbsp;")
-            sb.append(escapeHtml(entry.value))
-            sb.append("<br/>")
-            sb.append("<span style='color:gray;font-size:90%;'>")
-            sb.append("&nbsp;&nbsp;&nbsp;&nbsp;")
-            sb.append(escapeHtml(fileName)).append(":").append(lineNumber)
-            sb.append("</span>")
+        if (translations.isEmpty() && displayLocale != null) {
+            // Show warning for missing translation
+            sb.append("<p style='margin: 6px 0; color: #CC7832;'>")
+            sb.append("<b>⚠ Missing translation for '").append(displayLocale).append("'</b>")
             sb.append("</p>")
+            sb.append("<p style='margin: 6px 0; color:gray;'>")
+            sb.append("This key exists in other locales but not in the selected display language.")
+            sb.append("</p>")
+        } else {
+            translations.entries.sortedBy { it.key }.forEach { (locale, entry) ->
+                val fileName = getShortFilePath(entry, context)
+                val lineNumber = getLineNumber(entry, context)
+
+                sb.append("<p style='margin: 6px 0;'>")
+                sb.append("<b><code>").append(locale).append("</code></b>")
+                sb.append("&nbsp;&nbsp;")
+                sb.append(escapeHtml(entry.value))
+                sb.append("<br/>")
+                sb.append("<span style='color:gray;font-size:90%;'>")
+                sb.append("&nbsp;&nbsp;&nbsp;&nbsp;")
+                sb.append(escapeHtml(fileName)).append(":").append(lineNumber)
+                sb.append("</span>")
+                sb.append("</p>")
+            }
         }
 
         sb.append(DocumentationMarkup.CONTENT_END)

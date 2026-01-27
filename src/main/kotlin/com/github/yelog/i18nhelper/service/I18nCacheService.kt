@@ -91,6 +91,19 @@ class I18nCacheService(private val project: Project) : Disposable {
         return data.getTranslation(key, null)
     }
 
+    /**
+     * Get translation for a specific locale without fallback to other locales.
+     * Returns null if the exact locale is not found.
+     */
+    fun getTranslationStrict(key: String, locale: String): TranslationEntry? {
+        val data = translationData ?: return null
+        val candidates = I18nLocaleUtils.buildLocaleCandidates(locale)
+        for (candidate in candidates) {
+            data.getTranslation(key, candidate)?.let { return it }
+        }
+        return null
+    }
+
     fun getAllTranslations(key: String): Map<String, TranslationEntry> {
         return translationData?.getAllTranslations(key) ?: emptyMap()
     }

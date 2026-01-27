@@ -108,12 +108,33 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             if (settings.state.displayMode == I18nDisplayMode.TRANSLATION_ONLY) return true
 
             val locale = settings.getDisplayLocaleOrNull()
-            // Try full key first, then partial key as fallback
-            val translation = cacheService.getTranslation(fullKey, locale)
-                ?: cacheService.getTranslation(partialKey, locale)
-                ?: return true
 
-            val translationText = truncateText(translation.value, 50)
+            // Determine the text to display
+            val translationText = if (locale != null) {
+                // Try full key first, then partial key as fallback
+                val translation = cacheService.getTranslationStrict(fullKey, locale)
+                    ?: cacheService.getTranslationStrict(partialKey, locale)
+
+                if (translation != null) {
+                    truncateText(translation.value, 50)
+                } else {
+                    // Check if the key exists in any locale
+                    val hasAnyTranslation = cacheService.getAllTranslations(fullKey).isNotEmpty()
+                        || cacheService.getAllTranslations(partialKey).isNotEmpty()
+                    if (hasAnyTranslation) {
+                        "⚠ Missing translation for '$locale'"
+                    } else {
+                        return true // Key doesn't exist at all, don't show hint
+                    }
+                }
+            } else {
+                // No display locale set, use any available translation
+                val translation = cacheService.getTranslation(fullKey, null)
+                    ?: cacheService.getTranslation(partialKey, null)
+                    ?: return true
+                truncateText(translation.value, 50)
+            }
+
             val presentation = createPresentation(factory, translationText)
 
             sink.addInlineElement(

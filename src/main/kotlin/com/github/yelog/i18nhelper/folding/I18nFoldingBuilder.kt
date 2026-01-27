@@ -51,9 +51,19 @@ class I18nFoldingBuilder : FoldingBuilderEx() {
             val partialKey = firstArg.stringValue ?: continue
             // Resolve full key including namespace from useTranslation hook
             val fullKey = I18nNamespaceResolver.getFullKey(call, partialKey)
-            val translation = cacheService.getTranslation(fullKey, locale)
-                ?: cacheService.getTranslation(partialKey, locale)
-                ?: continue
+
+            // Check if translation exists (either in specified locale or any locale)
+            val hasTranslation = if (locale != null) {
+                cacheService.getTranslationStrict(fullKey, locale) != null
+                    || cacheService.getTranslationStrict(partialKey, locale) != null
+                    || cacheService.getAllTranslations(fullKey).isNotEmpty()
+                    || cacheService.getAllTranslations(partialKey).isNotEmpty()
+            } else {
+                cacheService.getTranslation(fullKey, null) != null
+                    || cacheService.getTranslation(partialKey, null) != null
+            }
+
+            if (!hasTranslation) continue
 
             val offset = firstArg.textRange.endOffset
             if (!processedOffsets.add(offset)) continue
@@ -80,13 +90,34 @@ class I18nFoldingBuilder : FoldingBuilderEx() {
         val settings = I18nSettingsState.getInstance(literal.project)
         val locale = settings.getDisplayLocaleOrNull()
         val cacheService = I18nCacheService.getInstance(literal.project)
-        val translation = cacheService.getTranslation(fullKey, locale)
-            ?: cacheService.getTranslation(partialKey, locale)
-            ?: return null
+
+        // Determine the text to display
+        val translationText = if (locale != null) {
+            val translation = cacheService.getTranslationStrict(fullKey, locale)
+                ?: cacheService.getTranslationStrict(partialKey, locale)
+
+            if (translation != null) {
+                truncateText(translation.value, 50)
+            } else {
+                // Check if the key exists in any locale
+                val hasAnyTranslation = cacheService.getAllTranslations(fullKey).isNotEmpty()
+                    || cacheService.getAllTranslations(partialKey).isNotEmpty()
+                if (hasAnyTranslation) {
+                    "⚠ Missing '$locale'"
+                } else {
+                    return null
+                }
+            }
+        } else {
+            val translation = cacheService.getTranslation(fullKey, null)
+                ?: cacheService.getTranslation(partialKey, null)
+                ?: return null
+            truncateText(translation.value, 50)
+        }
 
         // Keep the quotes and replace only the content
         val quote = literal.text.firstOrNull() ?: '"'
-        return "$quote${truncateText(translation.value, 50)}$quote"
+        return "$quote$translationText$quote"
     }
 
     override fun isCollapsedByDefault(node: ASTNode): Boolean {
