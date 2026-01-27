@@ -3,18 +3,24 @@ package com.github.yelog.i18nhelper.statusbar
 import com.github.yelog.i18nhelper.service.I18nCacheService
 import com.github.yelog.i18nhelper.settings.I18nSettingsState
 import com.github.yelog.i18nhelper.util.I18nUiRefresher
+import com.intellij.icons.AllIcons
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.ListPopup
+import com.intellij.openapi.ui.popup.ListSeparator
 import com.intellij.openapi.ui.popup.PopupStep
 import com.intellij.openapi.ui.popup.util.BaseListPopupStep
 import com.intellij.openapi.wm.StatusBar
 import com.intellij.openapi.wm.StatusBarWidget
+import com.intellij.ui.awt.RelativePoint
 import com.intellij.util.Consumer
 import java.awt.Component
+import java.awt.Point
 import java.awt.event.MouseEvent
+import javax.swing.Icon
 
 /**
  * Status bar widget for displaying and switching i18n display language
@@ -64,7 +70,10 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
 
     private fun showPopup(component: Component) {
         val popup = createPopup() ?: return
-        popup.showUnderneathOf(component)
+        val dimension = popup.content.preferredSize
+        // Show popup above the status bar component
+        val point = Point(0, -dimension.height)
+        popup.show(RelativePoint(component, point))
     }
 
     private fun createPopup(): ListPopup? {
@@ -86,26 +95,81 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
 
         val currentLocale = settings.getDisplayLocaleOrNull()
 
-        val step = object : BaseListPopupStep<String>("Select I18n Display Language", locales) {
-            override fun onChosen(selectedValue: String?, finalChoice: Boolean): PopupStep<*>? {
-                if (selectedValue != null && selectedValue != currentLocale) {
-                    ApplicationManager.getApplication().invokeLater {
-                        settings.state.displayLocale = selectedValue
-                        thisLogger().info("Changed display locale to: $selectedValue")
-                        I18nUiRefresher.refresh(project)
+        // Create items list: Settings option + locales
+        val settingsItem = PopupItem.SettingsItem
+        val localeItems = locales.map { PopupItem.LocaleItem(it) }
+        val allItems = listOf(settingsItem) + localeItems
+
+        val step = object : BaseListPopupStep<PopupItem>("I18n Helper", allItems) {
+            override fun onChosen(selectedValue: PopupItem?, finalChoice: Boolean): PopupStep<*>? {
+                when (selectedValue) {
+                    is PopupItem.SettingsItem -> {
+                        ApplicationManager.getApplication().invokeLater {
+                            ShowSettingsUtil.getInstance().showSettingsDialog(project, "I18n Helper")
+                        }
                     }
+                    is PopupItem.LocaleItem -> {
+                        if (selectedValue.locale != currentLocale) {
+                            ApplicationManager.getApplication().invokeLater {
+                                settings.state.displayLocale = selectedValue.locale
+                                thisLogger().info("Changed display locale to: ${selectedValue.locale}")
+                                I18nUiRefresher.refresh(project)
+                            }
+                        }
+                    }
+                    null -> {}
                 }
                 return super.onChosen(selectedValue, finalChoice)
+            }
+
+            override fun getTextFor(value: PopupItem): String {
+                return when (value) {
+                    is PopupItem.SettingsItem -> "Go to Settings"
+                    is PopupItem.LocaleItem -> value.locale
+                }
+            }
+
+            override fun getIconFor(value: PopupItem): Icon? {
+                return when (value) {
+                    is PopupItem.SettingsItem -> AllIcons.General.Settings
+                    is PopupItem.LocaleItem -> null
+                }
+            }
+
+            override fun getSeparatorAbove(value: PopupItem): ListSeparator? {
+                return when (value) {
+                    is PopupItem.LocaleItem -> {
+                        // Show separator before first locale item
+                        if (value == localeItems.firstOrNull()) {
+                            ListSeparator("Display Language")
+                        } else null
+                    }
+                    else -> null
+                }
             }
 
             override fun isSpeedSearchEnabled(): Boolean = true
 
             override fun getDefaultOptionIndex(): Int {
-                val index = values.indexOf(currentLocale)
-                return if (index >= 0) index else 0
+                // Find the index of current locale in all items
+                val currentLocaleItem = localeItems.find { it.locale == currentLocale }
+                return if (currentLocaleItem != null) {
+                    val index = allItems.indexOf(currentLocaleItem)
+                    if (index >= 0) index else 1
+                } else {
+                    1 // Default to first locale if not found
+                }
             }
         }
 
         return JBPopupFactory.getInstance().createListPopup(step)
+    }
+
+    /**
+     * Sealed class representing popup menu items
+     */
+    private sealed class PopupItem {
+        object SettingsItem : PopupItem()
+        data class LocaleItem(val locale: String) : PopupItem()
     }
 }
