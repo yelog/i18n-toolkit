@@ -34,6 +34,7 @@
 
         <!-- Startup activity to initialize cache -->
         <postStartupActivity implementation="com.github.yelog.i18nhelper.startup.I18nProjectActivity"/>
+        <postStartupActivity implementation="com.github.yelog.i18nhelper.listener.I18nDocumentListenerRegistrar"/>
 
         <!-- Goto declaration handler for Cmd+Click on folded regions -->
         <gotoDeclarationHandler implementation="com.github.yelog.i18nhelper.navigation.I18nGotoDeclarationHandler" order="first"/>

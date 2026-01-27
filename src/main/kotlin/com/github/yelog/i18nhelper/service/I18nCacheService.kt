@@ -6,6 +6,7 @@ import com.github.yelog.i18nhelper.parser.TranslationFileParser
 import com.github.yelog.i18nhelper.scanner.I18nDirectoryScanner
 import com.github.yelog.i18nhelper.util.I18nKeyGenerator
 import com.github.yelog.i18nhelper.util.I18nLocaleUtils
+import com.github.yelog.i18nhelper.util.I18nUiRefresher
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
@@ -149,6 +150,7 @@ class I18nCacheService(private val project: Project) : Disposable {
     fun invalidateFile(file: VirtualFile) {
         if (I18nDirectoryScanner.isTranslationFile(file)) {
             refresh()
+            I18nUiRefresher.refresh(project)
         }
     }
 
