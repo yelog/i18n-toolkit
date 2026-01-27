@@ -1,6 +1,6 @@
-# I18n Helper
+# I18n Toolkit
 
-![Build](https://github.com/yelog/i18n-helper/workflows/Build/badge.svg)
+![Build](https://github.com/yelog/i18n-toolkit/workflows/Build/badge.svg)
 [![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 
@@ -51,13 +51,13 @@ const { t } = useTranslation('common')
 const title = t('app.title')
 ```
 
-3. Open settings: `Settings/Preferences` -> search for `I18n Helper`.
+3. Open settings: `Settings/Preferences` -> search for `I18n Toolkit`.
    - Select Display language
    - Choose display mode (inline or translation-only)
    - Configure custom i18n functions if needed
 
 ## Settings
-> Open: `Settings/Preferences` -> search for `I18n Helper`
+> Open: `Settings/Preferences` -> search for `I18n Toolkit`
 
 | Setting | Description | Affects |
 | --- | --- | --- |
@@ -108,7 +108,7 @@ Limitations:
 - YAML/TOML offsets are estimated and may differ after formatting
 
 ## Actions and shortcuts
-> Configure shortcuts in `Settings/Preferences -> Keymap` and search for `I18n Helper`.
+> Configure shortcuts in `Settings/Preferences -> Keymap` and search for `I18n Toolkit`.
 
 | Action | Description | Default shortcut |
 | --- | --- | --- |

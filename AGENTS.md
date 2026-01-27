@@ -41,10 +41,10 @@ The plugin provides i18n (internationalization) helper functionality for JetBrai
 ./gradlew test
 
 # Run a single test class
-./gradlew test --tests "com.github.yelog.i18nhelper.MyPluginTest"
+./gradlew test --tests "com.github.yelog.i18ntoolkit.MyPluginTest"
 
 # Run a single test method
-./gradlew test --tests "com.github.yelog.i18nhelper.MyPluginTest.testXMLFile"
+./gradlew test --tests "com.github.yelog.i18ntoolkit.MyPluginTest.testXMLFile"
 
 # Run tests matching a pattern
 ./gradlew test --tests "*MyPluginTest*"
@@ -84,7 +84,7 @@ Pre-configured run configurations are available in `.run/`:
 ```
 src/
 ├── main/
-│   ├── kotlin/com/github/yelog/i18nhelper/
+│   ├── kotlin/com/github/yelog/i18ntoolkit/
 │   │   ├── MyBundle.kt              # Message bundle for i18n
 │   │   ├── services/                # Project-level services
 │   │   ├── startup/                 # Project startup activities
@@ -118,7 +118,7 @@ src/
 ```kotlin
 // Good
 import com.intellij.openapi.project.Project
-import com.github.yelog.i18nhelper.MyBundle
+import com.github.yelog.i18ntoolkit.MyBundle
 
 // Bad
 import com.intellij.openapi.*
@@ -128,7 +128,7 @@ import com.intellij.openapi.*
 
 | Element | Convention | Example |
 |---------|------------|---------|
-| Package | lowercase, dot-separated | `com.github.yelog.i18nhelper` |
+| Package | lowercase, dot-separated | `com.github.yelog.i18ntoolkit` |
 | Class | PascalCase | `MyProjectService` |
 | Function | camelCase | `getRandomNumber()` |
 | Constant | UPPER_SNAKE_CASE | `private const val BUNDLE = "..."` |

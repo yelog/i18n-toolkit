@@ -1,7 +1,7 @@
 <!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
 <idea-plugin>
-    <id>com.github.yelog.i18nhelper</id>
-    <name>I18n Helper</name>
+    <id>com.github.yelog.i18ntoolkit</id>
+    <name>I18n Toolkit</name>
     <vendor url="https://github.com/yelog">yelog</vendor>
 
     <description><![CDATA[
@@ -24,148 +24,148 @@
 
     <applicationListeners>
         <!-- Dynamic plugin loading listener - no restart required -->
-        <listener class="com.github.yelog.i18nhelper.startup.I18nDynamicPluginListener"
+        <listener class="com.github.yelog.i18ntoolkit.startup.I18nDynamicPluginListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>
     </applicationListeners>
 
     <extensions defaultExtensionNs="com.intellij">
         <!-- Project Service for caching translations -->
-        <projectService serviceImplementation="com.github.yelog.i18nhelper.service.I18nCacheService"/>
+        <projectService serviceImplementation="com.github.yelog.i18ntoolkit.service.I18nCacheService"/>
 
         <!-- Startup activity to initialize cache -->
-        <postStartupActivity implementation="com.github.yelog.i18nhelper.startup.I18nProjectActivity"/>
-        <postStartupActivity implementation="com.github.yelog.i18nhelper.listener.I18nDocumentListenerRegistrar"/>
+        <postStartupActivity implementation="com.github.yelog.i18ntoolkit.startup.I18nProjectActivity"/>
+        <postStartupActivity implementation="com.github.yelog.i18ntoolkit.listener.I18nDocumentListenerRegistrar"/>
 
         <!-- Goto declaration handler for Cmd+Click on folded regions -->
-        <gotoDeclarationHandler implementation="com.github.yelog.i18nhelper.navigation.I18nGotoDeclarationHandler" order="first"/>
+        <gotoDeclarationHandler implementation="com.github.yelog.i18ntoolkit.navigation.I18nGotoDeclarationHandler" order="first"/>
 
         <!-- Goto implementation support for i18n keys -->
-        <definitionsScopedSearch implementation="com.github.yelog.i18nhelper.navigation.I18nDefinitionsScopedSearchExecutor"/>
+        <definitionsScopedSearch implementation="com.github.yelog.i18ntoolkit.navigation.I18nDefinitionsScopedSearchExecutor"/>
         <targetElementEvaluator language="JavaScript"
-                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.navigation.I18nTargetElementEvaluator"/>
         <targetElementEvaluator language="TypeScript"
-                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.navigation.I18nTargetElementEvaluator"/>
         <targetElementEvaluator language="Vue"
-                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.navigation.I18nTargetElementEvaluator"/>
         <targetElementEvaluator language="TypeScript JSX"
-                                implementationClass="com.github.yelog.i18nhelper.navigation.I18nTargetElementEvaluator"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.navigation.I18nTargetElementEvaluator"/>
 
         <!-- Documentation provider for Quick Definition/Documentation on i18n keys -->
         <lang.documentationProvider language="JavaScript"
-                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    implementationClass="com.github.yelog.i18ntoolkit.documentation.I18nDocumentationProvider"
                                     order="first"/>
         <lang.documentationProvider language="TypeScript"
-                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    implementationClass="com.github.yelog.i18ntoolkit.documentation.I18nDocumentationProvider"
                                     order="first"/>
         <lang.documentationProvider language="Vue"
-                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    implementationClass="com.github.yelog.i18ntoolkit.documentation.I18nDocumentationProvider"
                                     order="first"/>
         <lang.documentationProvider language="TypeScript JSX"
-                                    implementationClass="com.github.yelog.i18nhelper.documentation.I18nDocumentationProvider"
+                                    implementationClass="com.github.yelog.i18ntoolkit.documentation.I18nDocumentationProvider"
                                     order="first"/>
 
         <!-- Inlay hints for showing translations inline -->
         <codeInsight.inlayProvider language="JavaScript"
-                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+                                   implementationClass="com.github.yelog.i18ntoolkit.hint.I18nInlayHintsProvider"/>
         <codeInsight.inlayProvider language="TypeScript"
-                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+                                   implementationClass="com.github.yelog.i18ntoolkit.hint.I18nInlayHintsProvider"/>
         <codeInsight.inlayProvider language="Vue"
-                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+                                   implementationClass="com.github.yelog.i18ntoolkit.hint.I18nInlayHintsProvider"/>
         <codeInsight.inlayProvider language="TypeScript JSX"
-                                   implementationClass="com.github.yelog.i18nhelper.hint.I18nInlayHintsProvider"/>
+                                   implementationClass="com.github.yelog.i18ntoolkit.hint.I18nInlayHintsProvider"/>
 
         <!-- Annotator for highlighting missing i18n keys -->
         <annotator language="JavaScript"
-                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+                   implementationClass="com.github.yelog.i18ntoolkit.annotator.I18nKeyAnnotator"/>
         <annotator language="TypeScript"
-                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+                   implementationClass="com.github.yelog.i18ntoolkit.annotator.I18nKeyAnnotator"/>
         <annotator language="Vue"
-                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+                   implementationClass="com.github.yelog.i18ntoolkit.annotator.I18nKeyAnnotator"/>
         <annotator language="TypeScript JSX"
-                   implementationClass="com.github.yelog.i18nhelper.annotator.I18nKeyAnnotator"/>
+                   implementationClass="com.github.yelog.i18ntoolkit.annotator.I18nKeyAnnotator"/>
 
         <!-- Completion for i18n keys -->
         <completion.contributor language="JavaScript"
-                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.completion.I18nKeyCompletionContributor"/>
         <completion.contributor language="TypeScript"
-                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.completion.I18nKeyCompletionContributor"/>
         <completion.contributor language="Vue"
-                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.completion.I18nKeyCompletionContributor"/>
         <completion.contributor language="TypeScript JSX"
-                                implementationClass="com.github.yelog.i18nhelper.completion.I18nKeyCompletionContributor"/>
+                                implementationClass="com.github.yelog.i18ntoolkit.completion.I18nKeyCompletionContributor"/>
 
         <!-- Lookup renderer customization for translation highlight -->
-        <lookup.customizer implementationClass="com.github.yelog.i18nhelper.completion.I18nLookupCustomizer"/>
+        <lookup.customizer implementationClass="com.github.yelog.i18ntoolkit.completion.I18nLookupCustomizer"/>
         
         <!-- Reference contributor for Cmd+Click navigation -->
         <psi.referenceContributor language="JavaScript"
-                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+                                  implementation="com.github.yelog.i18ntoolkit.reference.I18nReferenceContributor"/>
         <psi.referenceContributor language="TypeScript"
-                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+                                  implementation="com.github.yelog.i18ntoolkit.reference.I18nReferenceContributor"/>
         <psi.referenceContributor language="Vue"
-                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+                                  implementation="com.github.yelog.i18ntoolkit.reference.I18nReferenceContributor"/>
         <psi.referenceContributor language="TypeScript JSX"
-                                  implementation="com.github.yelog.i18nhelper.reference.I18nReferenceContributor"/>
+                                  implementation="com.github.yelog.i18ntoolkit.reference.I18nReferenceContributor"/>
         
         <!-- Line marker for cross-language navigation in translation files -->
         <codeInsight.lineMarkerProvider language="JSON"
-                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+                                        implementationClass="com.github.yelog.i18ntoolkit.marker.I18nLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="yaml"
-                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+                                        implementationClass="com.github.yelog.i18ntoolkit.marker.I18nLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="JavaScript"
-                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+                                        implementationClass="com.github.yelog.i18ntoolkit.marker.I18nLineMarkerProvider"/>
         <codeInsight.lineMarkerProvider language="TypeScript"
-                                        implementationClass="com.github.yelog.i18nhelper.marker.I18nLineMarkerProvider"/>
+                                        implementationClass="com.github.yelog.i18ntoolkit.marker.I18nLineMarkerProvider"/>
 
         <lang.foldingBuilder language="JavaScript"
-                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+                             implementationClass="com.github.yelog.i18ntoolkit.folding.I18nFoldingBuilder"/>
         <lang.foldingBuilder language="TypeScript"
-                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+                             implementationClass="com.github.yelog.i18ntoolkit.folding.I18nFoldingBuilder"/>
         <lang.foldingBuilder language="Vue"
-                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+                             implementationClass="com.github.yelog.i18ntoolkit.folding.I18nFoldingBuilder"/>
         <lang.foldingBuilder language="TypeScript JSX"
-                             implementationClass="com.github.yelog.i18nhelper.folding.I18nFoldingBuilder"/>
+                             implementationClass="com.github.yelog.i18ntoolkit.folding.I18nFoldingBuilder"/>
 
-        <projectConfigurable id="i18n.helper.settings"
-                             displayName="I18n Helper"
-                             instance="com.github.yelog.i18nhelper.settings.I18nSettingsConfigurable"
+        <projectConfigurable id="i18n.toolkit.settings"
+                             displayName="I18n Toolkit"
+                             instance="com.github.yelog.i18ntoolkit.settings.I18nSettingsConfigurable"
                              nonDefaultProject="true"/>
         
         <!-- File listener for cache invalidation -->
-        <vfs.asyncListener implementation="com.github.yelog.i18nhelper.listener.I18nFileListener"/>
+        <vfs.asyncListener implementation="com.github.yelog.i18ntoolkit.listener.I18nFileListener"/>
 
         <!-- Find Usages support for i18n keys in translation files -->
-        <referencesSearch implementation="com.github.yelog.i18nhelper.reference.I18nUsageSearcher"/>
-        <findUsagesHandlerFactory implementation="com.github.yelog.i18nhelper.usages.I18nFindUsagesHandlerFactory"
+        <referencesSearch implementation="com.github.yelog.i18ntoolkit.reference.I18nUsageSearcher"/>
+        <findUsagesHandlerFactory implementation="com.github.yelog.i18ntoolkit.usages.I18nFindUsagesHandlerFactory"
                                   order="first"/>
 
         <!-- Search Everywhere tab for i18n translations -->
-        <searchEverywhereContributor implementation="com.github.yelog.i18nhelper.searcheverywhere.I18nSearchEverywhereContributorFactory"/>
+        <searchEverywhereContributor implementation="com.github.yelog.i18ntoolkit.searcheverywhere.I18nSearchEverywhereContributorFactory"/>
 
         <!-- Status bar widget for i18n display language -->
-        <statusBarWidgetFactory id="I18nDisplayLanguage" implementation="com.github.yelog.i18nhelper.statusbar.I18nStatusBarWidgetFactory" order="before memoryIndicator"/>
-        <notificationGroup id="I18n Helper" displayType="BALLOON"/>
+        <statusBarWidgetFactory id="I18nDisplayLanguage" implementation="com.github.yelog.i18ntoolkit.statusbar.I18nStatusBarWidgetFactory" order="before memoryIndicator"/>
+        <notificationGroup id="I18n Toolkit" displayType="BALLOON"/>
     </extensions>
 
     <actions>
-        <action id="I18nHelper.SwitchLocale"
-                class="com.github.yelog.i18nhelper.action.I18nSwitchLocaleAction"
+        <action id="I18nToolkit.SwitchLocale"
+                class="com.github.yelog.i18ntoolkit.action.I18nSwitchLocaleAction"
                 text="Switch I18n Display Language"
                 description="Cycle i18n display language"/>
-        <action id="I18nHelper.ShowTranslationsPopup"
-                class="com.github.yelog.i18nhelper.action.I18nTranslationsPopupAction"
+        <action id="I18nToolkit.ShowTranslationsPopup"
+                class="com.github.yelog.i18ntoolkit.action.I18nTranslationsPopupAction"
                 text="Show I18n Translations"
                 description="Show translations for current i18n key">
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift I"/>
             <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift I"/>
             <keyboard-shortcut keymap="$default" first-keystroke="control shift I"/>
         </action>
-        <action id="I18nHelper.CopyKey"
-                class="com.github.yelog.i18nhelper.action.I18nCopyKeyAction"
+        <action id="I18nToolkit.CopyKey"
+                class="com.github.yelog.i18ntoolkit.action.I18nCopyKeyAction"
                 text="Copy I18n Key"
                 description="Copy current i18n key"/>
-        <action id="I18nHelper.NavigateToFile"
-                class="com.github.yelog.i18nhelper.action.I18nNavigateToFileAction"
+        <action id="I18nToolkit.NavigateToFile"
+                class="com.github.yelog.i18ntoolkit.action.I18nNavigateToFileAction"
                 text="Navigate to I18n File"
                 description="Navigate to translation file for current i18n key">
             <keyboard-shortcut keymap="$default" first-keystroke="control J"/>

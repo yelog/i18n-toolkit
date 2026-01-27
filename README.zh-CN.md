@@ -1,6 +1,6 @@
-# I18n Helper
+# I18n Toolkit
 
-![Build](https://github.com/yelog/i18n-helper/workflows/Build/badge.svg)
+![Build](https://github.com/yelog/i18n-toolkit/workflows/Build/badge.svg)
 [![Version](https://img.shields.io/jetbrains/plugin/v/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 
@@ -38,13 +38,13 @@ const { t } = useTranslation('common')
 const title = t('app.title')
 ```
 
-3. 打开设置：`Settings/Preferences` -> 搜索 `I18n Helper`
+3. 打开设置：`Settings/Preferences` -> 搜索 `I18n Toolkit`
    - 选择显示语言
    - 选择显示模式（内联 / 仅翻译）
    - 配置自定义 i18n 函数名（如 `t, $t, i18n.t`）
 
 ## 配置说明
-> 设置入口：`Settings/Preferences` -> 搜索 `I18n Helper`
+> 设置入口：`Settings/Preferences` -> 搜索 `I18n Toolkit`
 
 | 配置项 | 说明 | 影响范围 |
 | --- | --- | --- |
@@ -95,7 +95,7 @@ t('profile.name') // 实际匹配 user.profile.name
 - YAML/TOML 偏移为估算值，格式化后可能略有偏差
 
 ## 常用动作与快捷键
-> 快捷键可在 `Settings/Preferences -> Keymap` 中搜索 `I18n Helper` 自行配置
+> 快捷键可在 `Settings/Preferences -> Keymap` 中搜索 `I18n Toolkit` 自行配置
 
 | 动作 | 说明 | 默认快捷键 |
 | --- | --- | --- |
