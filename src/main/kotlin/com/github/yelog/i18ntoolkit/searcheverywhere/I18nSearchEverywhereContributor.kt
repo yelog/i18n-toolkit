@@ -30,7 +30,8 @@ import java.awt.Color
 class I18nSearchEverywhereContributorFactory : SearchEverywhereContributorFactory<I18nSearchItem> {
 
     override fun createContributor(event: AnActionEvent): SearchEverywhereContributor<I18nSearchItem> {
-        val project = event.getRequiredData(CommonDataKeys.PROJECT)
+        val project = event.getData(CommonDataKeys.PROJECT)
+            ?: throw IllegalStateException("Project is required for I18n Search Everywhere contributor")
         return I18nSearchEverywhereContributor(project)
     }
 

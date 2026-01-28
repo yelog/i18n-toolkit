@@ -35,4 +35,8 @@ class I18nDynamicPluginListener : DynamicPluginListener {
             }
         }
     }
+
+    override fun beforePluginUnload(pluginDescriptor: IdeaPluginDescriptor, isUpdate: Boolean) {
+        // No cleanup needed - services will be disposed automatically
+    }
 }

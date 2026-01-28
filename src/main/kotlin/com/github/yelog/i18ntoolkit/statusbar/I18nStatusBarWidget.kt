@@ -26,7 +26,7 @@ import javax.swing.Icon
 /**
  * Status bar widget for displaying and switching i18n display language
  */
-class I18nStatusBarWidget(private val project: Project) : StatusBarWidget, StatusBarWidget.TextPresentation {
+class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
 
     companion object {
         const val ID = "I18nDisplayLanguage"
@@ -35,7 +35,24 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
 
     override fun ID(): String = ID
 
-    override fun getPresentation(): StatusBarWidget.WidgetPresentation = this
+    override fun getPresentation(): StatusBarWidget.WidgetPresentation {
+        return object : StatusBarWidget.TextPresentation {
+            override fun getText(): String = getCurrentDisplayText()
+
+            override fun getTooltipText(): String {
+                return "I18n Display Language: ${getCurrentDisplayText()}\nClick to switch language"
+            }
+
+            override fun getClickConsumer(): Consumer<MouseEvent> {
+                return Consumer { event ->
+                    thisLogger().info("I18n status bar widget clicked")
+                    showPopup(event.component)
+                }
+            }
+
+            override fun getAlignment(): Float = Component.CENTER_ALIGNMENT
+        }
+    }
 
     override fun install(statusBar: StatusBar) {
         thisLogger().info("I18n status bar widget installed")
@@ -44,24 +61,6 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget, Statu
     override fun dispose() {
         // Nothing to dispose
     }
-
-    // TextPresentation methods
-    override fun getText(): String {
-        return getCurrentDisplayText()
-    }
-
-    override fun getTooltipText(): String {
-        return "I18n Display Language: ${getCurrentDisplayText()}\nClick to switch language"
-    }
-
-    override fun getClickConsumer(): Consumer<MouseEvent>? {
-        return Consumer { event ->
-            thisLogger().info("I18n status bar widget clicked")
-            showPopup(event.component)
-        }
-    }
-
-    override fun getAlignment(): Float = Component.CENTER_ALIGNMENT
 
     private fun getCurrentDisplayText(): String {
         val settings = I18nSettingsState.getInstance(project)

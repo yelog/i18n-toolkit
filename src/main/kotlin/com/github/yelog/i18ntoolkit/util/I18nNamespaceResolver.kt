@@ -2,6 +2,7 @@ package com.github.yelog.i18ntoolkit.util
 
 import com.intellij.lang.javascript.psi.*
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiRecursiveElementVisitor
 import com.intellij.psi.util.PsiTreeUtil
 
 /**
@@ -47,18 +48,20 @@ object I18nNamespaceResolver {
     private fun findUseTranslationNamespace(scope: PsiElement): String {
         var namespace = ""
 
-        scope.accept(object : JSRecursiveElementVisitor() {
-            override fun visitJSCallExpression(node: JSCallExpression) {
+        scope.accept(object : PsiRecursiveElementVisitor() {
+            override fun visitElement(element: PsiElement) {
                 if (namespace.isNotEmpty()) return // Already found
 
-                val methodExpr = node.methodExpression as? JSReferenceExpression
-                val methodName = methodExpr?.referenceName
+                if (element is JSCallExpression) {
+                    val methodExpr = element.methodExpression as? JSReferenceExpression
+                    val methodName = methodExpr?.referenceName
 
-                if (methodName != null && translationHooks.contains(methodName)) {
-                    namespace = extractNamespaceFromHook(node)
+                    if (methodName != null && translationHooks.contains(methodName)) {
+                        namespace = extractNamespaceFromHook(element)
+                    }
                 }
 
-                super.visitJSCallExpression(node)
+                super.visitElement(element)
             }
         })
 
