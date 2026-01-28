@@ -1,14 +1,19 @@
 package com.github.yelog.i18ntoolkit.documentation
 
+import com.github.yelog.i18ntoolkit.popup.I18nTranslationEditPopup
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
+import com.github.yelog.i18ntoolkit.util.I18nKeyExtractor
 import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.intellij.lang.documentation.AbstractDocumentationProvider
 import com.intellij.lang.documentation.DocumentationMarkup
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Document
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.TextEditor
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiManager
@@ -23,11 +28,21 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
 
     override fun generateDoc(element: PsiElement?, originalElement: PsiElement?): String? {
         val target = originalElement ?: element ?: return null
-        val (fullKey, partialKey) = extractI18nKeys(target) ?: return null
-
-        val cacheService = I18nCacheService.getInstance(target.project)
-        val settings = I18nSettingsState.getInstance(target.project)
+        val project = target.project
+        val cacheService = I18nCacheService.getInstance(project)
+        val settings = I18nSettingsState.getInstance(project)
         val displayLocale = settings.getDisplayLocaleOrNull()
+
+        // Try extracting key from i18n function call first, then from translation file
+        val keys = extractI18nKeys(target)
+            ?: I18nKeyExtractor.findKeyAtOffset(
+                target.containingFile ?: return null,
+                target.textOffset,
+                cacheService
+            )?.let { Pair(it.fullKey, it.partialKey) }
+            ?: return null
+
+        val (fullKey, partialKey) = keys
 
         // Always get all translations for the documentation panel
         var translations = cacheService.getAllTranslations(fullKey)
@@ -42,7 +57,14 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
 
         if (translations.isEmpty()) return null
 
-        return buildDocumentation(displayKey, translations, target, displayLocale)
+        // Show editable popup on EDT and suppress standard doc panel
+        val allLocales = cacheService.getAvailableLocales()
+        ApplicationManager.getApplication().invokeLater {
+            val editor = FileEditorManager.getInstance(project).selectedTextEditor ?: return@invokeLater
+            I18nTranslationEditPopup.show(project, editor, displayKey, translations, displayLocale, allLocales)
+        }
+
+        return null
     }
 
     override fun getQuickNavigateInfo(element: PsiElement?, originalElement: PsiElement?): String? {

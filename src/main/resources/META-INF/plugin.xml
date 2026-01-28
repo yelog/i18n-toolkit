@@ -51,6 +51,9 @@
                                 implementationClass="com.github.yelog.i18ntoolkit.navigation.I18nTargetElementEvaluator"/>
 
         <!-- Documentation provider for Quick Definition/Documentation on i18n keys -->
+        <lang.documentationProvider language="JSON"
+                                    implementationClass="com.github.yelog.i18ntoolkit.documentation.I18nDocumentationProvider"
+                                    order="first"/>
         <lang.documentationProvider language="JavaScript"
                                     implementationClass="com.github.yelog.i18ntoolkit.documentation.I18nDocumentationProvider"
                                     order="first"/>
