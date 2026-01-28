@@ -76,10 +76,9 @@ class I18nSearchEverywhereContributor(
         currentPattern = query
         if (query.isEmpty()) return
 
-        val tokens = query.lowercase(Locale.ROOT)
-            .split(Regex("\\s+"))
-            .filter { it.isNotEmpty() }
-        if (tokens.isEmpty()) return
+        val tokens = tokenizePattern(query)
+        val compactQuery = compactString(query)
+        if (tokens.isEmpty() && compactQuery.isEmpty()) return
 
         val cacheService = I18nCacheService.getInstance(project)
         cacheService.initialize()
@@ -95,7 +94,7 @@ class I18nSearchEverywhereContributor(
             val translations = cacheService.getAllTranslations(key)
             if (translations.isEmpty()) continue
 
-            val score = calculateMatchScore(key, translations.values, tokens)
+            val score = calculateMatchScore(key, translations.values, tokens, compactQuery)
             if (score > 0) {
                 matchedItems.add(I18nSearchItem(key, translations) to score)
             }
@@ -136,47 +135,72 @@ class I18nSearchEverywhereContributor(
     private fun calculateMatchScore(
         key: String,
         entries: Collection<TranslationEntry>,
-        tokens: List<String>
+        tokens: List<String>,
+        compactQuery: String
     ): Int {
         val keyLower = key.lowercase(Locale.ROOT)
         val valuesLower = entries.map { it.value.lowercase(Locale.ROOT) }
+        val keyCompact = compactString(keyLower)
+        val valuesCompact = entries.map { compactString(it.value) }
 
-        // Check if all tokens match somewhere (key or values)
-        val allTokensMatch = tokens.all { token ->
+        val tokenMatch = tokens.isNotEmpty() && tokens.all { token ->
             keyLower.contains(token) || valuesLower.any { it.contains(token) }
         }
-        if (!allTokensMatch) return 0
+
+        val compactMatch = compactQuery.isNotEmpty() && (
+            keyCompact.contains(compactQuery) ||
+                isSubsequence(compactQuery, keyCompact) ||
+                valuesCompact.any { it.contains(compactQuery) || isSubsequence(compactQuery, it) }
+            )
+
+        if (!tokenMatch && !compactMatch) return 0
 
         var score = 0
 
-        // Check key matches
-        val keyMatchesAllTokens = tokens.all { keyLower.contains(it) }
-        if (keyMatchesAllTokens) {
-            score += 100
+        if (tokenMatch) {
+            // Check key matches
+            val keyMatchesAllTokens = tokens.all { keyLower.contains(it) }
+            if (keyMatchesAllTokens) {
+                score += 100
+            }
+
+            // Check if key starts with first token (highest priority)
+            val firstToken = tokens.first()
+            if (keyLower.startsWith(firstToken)) {
+                score += 1000
+            } else if (tokens.any { keyLower.startsWith(it) }) {
+                // Key starts with any token
+                score += 500
+            }
+
+            // Bonus for earlier position of first token match in key
+            val firstTokenIndex = keyLower.indexOf(firstToken)
+            if (firstTokenIndex >= 0) {
+                // Earlier position = higher score (max 50 points)
+                score += maxOf(0, 50 - firstTokenIndex)
+            }
+
+            // Small bonus if values also match
+            val valuesMatchAllTokens = tokens.all { token ->
+                valuesLower.any { it.contains(token) }
+            }
+            if (valuesMatchAllTokens) {
+                score += 10
+            }
         }
 
-        // Check if key starts with first token (highest priority)
-        val firstToken = tokens.first()
-        if (keyLower.startsWith(firstToken)) {
-            score += 1000
-        } else if (tokens.any { keyLower.startsWith(it) }) {
-            // Key starts with any token
-            score += 500
-        }
-
-        // Bonus for earlier position of first token match in key
-        val firstTokenIndex = keyLower.indexOf(firstToken)
-        if (firstTokenIndex >= 0) {
-            // Earlier position = higher score (max 50 points)
-            score += maxOf(0, 50 - firstTokenIndex)
-        }
-
-        // Small bonus if values also match
-        val valuesMatchAllTokens = tokens.all { token ->
-            valuesLower.any { it.contains(token) }
-        }
-        if (valuesMatchAllTokens) {
-            score += 10
+        if (compactMatch) {
+            if (compactQuery.isNotEmpty()) {
+                score += when {
+                    keyCompact.startsWith(compactQuery) -> 800
+                    keyCompact.contains(compactQuery) -> 400
+                    isSubsequence(compactQuery, keyCompact) -> 150
+                    else -> 0
+                }
+                if (valuesCompact.any { it.contains(compactQuery) || isSubsequence(compactQuery, it) }) {
+                    score += 20
+                }
+            }
         }
 
         return score
@@ -288,12 +312,11 @@ private class I18nSearchEverywhereRenderer(
         if (value == null) return
 
         val pattern = patternProvider()
-        val tokens = pattern.lowercase(Locale.ROOT)
-            .split(Regex("\\s+"))
-            .filter { it.isNotEmpty() }
+        val tokens = tokenizePattern(pattern)
+        val compactPattern = compactString(pattern)
 
         // Display key first (as main search content)
-        appendWithHighlight(value.key, tokens, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES, selected)
+        appendWithHighlight(value.key, tokens, compactPattern, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES, selected)
         append("  ", SimpleTextAttributes.REGULAR_ATTRIBUTES)
 
         // Get display locale from settings
@@ -312,7 +335,7 @@ private class I18nSearchEverywhereRenderer(
         if (displayEntry != null) {
             // Show translation value
             val truncatedValue = truncate(displayEntry.value, 50)
-            appendWithHighlight(truncatedValue, tokens, SimpleTextAttributes.GRAYED_ATTRIBUTES, selected)
+            appendWithHighlight(truncatedValue, tokens, compactPattern, SimpleTextAttributes.GRAYED_ATTRIBUTES, selected)
 
             // Show file path and line number
             val location = buildLocationText(displayEntry)
@@ -328,10 +351,11 @@ private class I18nSearchEverywhereRenderer(
     private fun appendWithHighlight(
         text: String,
         tokens: List<String>,
+        compactPattern: String,
         baseAttributes: SimpleTextAttributes,
         selected: Boolean
     ) {
-        if (tokens.isEmpty()) {
+        if (tokens.isEmpty() && compactPattern.isEmpty()) {
             append(text, baseAttributes)
             return
         }
@@ -348,6 +372,10 @@ private class I18nSearchEverywhereRenderer(
                 matchRanges.add(index until index + token.length)
                 startIndex = index + 1
             }
+        }
+
+        if (matchRanges.isEmpty() && compactPattern.isNotEmpty()) {
+            matchRanges.addAll(findCompactMatchRanges(text, compactPattern))
         }
 
         if (matchRanges.isEmpty()) {
@@ -424,4 +452,119 @@ private class I18nSearchEverywhereRenderer(
             text
         }
     }
+}
+
+private val TOKEN_SPLIT_REGEX = Regex("[\\s\\p{Punct}_]+")
+private val PUNCT_CHAR_REGEX = Regex("\\p{Punct}")
+
+private fun tokenizePattern(pattern: String): List<String> {
+    return pattern.lowercase(Locale.ROOT)
+        .split(TOKEN_SPLIT_REGEX)
+        .filter { it.isNotEmpty() }
+}
+
+private fun compactString(value: String): String {
+    return value.lowercase(Locale.ROOT).replace(TOKEN_SPLIT_REGEX, "")
+}
+
+private fun isSubsequence(needle: String, haystack: String): Boolean {
+    if (needle.isEmpty()) return true
+    var i = 0
+    for (ch in haystack) {
+        if (ch == needle[i]) {
+            i++
+            if (i == needle.length) return true
+        }
+    }
+    return false
+}
+
+private fun findCompactMatchRanges(text: String, compactPattern: String): List<IntRange> {
+    if (compactPattern.isEmpty()) return emptyList()
+    val (compactText, indexMap) = buildCompactTextAndIndexMap(text)
+    if (compactText.isEmpty()) return emptyList()
+
+    val needle = compactPattern.lowercase(Locale.ROOT)
+    val haystack = compactText.lowercase(Locale.ROOT)
+
+    val exactIndex = haystack.indexOf(needle)
+    if (exactIndex >= 0) {
+        return buildRangesFromCompactSpan(indexMap, exactIndex, exactIndex + needle.length - 1)
+    }
+
+    val subsequenceIndices = findSubsequenceMatchIndices(needle, haystack, indexMap)
+    if (subsequenceIndices.isEmpty()) return emptyList()
+    return buildRangesFromOriginalIndices(subsequenceIndices)
+}
+
+private fun buildCompactTextAndIndexMap(text: String): Pair<String, List<Int>> {
+    val compact = StringBuilder(text.length)
+    val indexMap = ArrayList<Int>(text.length)
+    text.forEachIndexed { index, ch ->
+        if (!isSeparatorChar(ch)) {
+            compact.append(ch.lowercaseChar())
+            indexMap.add(index)
+        }
+    }
+    return compact.toString() to indexMap
+}
+
+private fun isSeparatorChar(ch: Char): Boolean {
+    return ch == '_' || ch.isWhitespace() || PUNCT_CHAR_REGEX.matches(ch.toString())
+}
+
+private fun buildRangesFromCompactSpan(indexMap: List<Int>, start: Int, end: Int): List<IntRange> {
+    if (start < 0 || end >= indexMap.size || start > end) return emptyList()
+    val ranges = mutableListOf<IntRange>()
+    var rangeStart = indexMap[start]
+    var prev = rangeStart
+    for (i in (start + 1)..end) {
+        val originalIndex = indexMap[i]
+        if (originalIndex == prev + 1) {
+            prev = originalIndex
+        } else {
+            ranges.add(rangeStart..prev)
+            rangeStart = originalIndex
+            prev = originalIndex
+        }
+    }
+    ranges.add(rangeStart..prev)
+    return ranges
+}
+
+private fun findSubsequenceMatchIndices(
+    needle: String,
+    haystack: String,
+    indexMap: List<Int>
+): List<Int> {
+    if (needle.isEmpty()) return emptyList()
+    val indices = mutableListOf<Int>()
+    var needleIndex = 0
+    for (i in haystack.indices) {
+        if (haystack[i] == needle[needleIndex]) {
+            indices.add(indexMap[i])
+            needleIndex++
+            if (needleIndex == needle.length) return indices
+        }
+    }
+    return emptyList()
+}
+
+private fun buildRangesFromOriginalIndices(indices: List<Int>): List<IntRange> {
+    if (indices.isEmpty()) return emptyList()
+    val ranges = mutableListOf<IntRange>()
+    var rangeStart = indices.first()
+    var prev = rangeStart
+    for (i in 1 until indices.size) {
+        val index = indices[i]
+        if (index == prev + 1) {
+            prev = index
+        } else {
+            ranges.add(rangeStart..prev)
+            rangeStart = index
+            prev = index
+        }
+    }
+    ranges.add(rangeStart..prev)
+    return ranges
 }
