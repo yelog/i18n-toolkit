@@ -148,10 +148,6 @@
     </extensions>
 
     <actions>
-        <action id="I18nToolkit.SwitchLocale"
-                class="com.github.yelog.i18ntoolkit.action.I18nSwitchLocaleAction"
-                text="Switch I18n Display Language"
-                description="Cycle i18n display language"/>
         <action id="I18nToolkit.ShowTranslationsPopup"
                 class="com.github.yelog.i18ntoolkit.action.I18nTranslationsPopupAction"
                 text="Show I18n Translations"
@@ -159,16 +155,6 @@
             <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift I"/>
             <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift I"/>
             <keyboard-shortcut keymap="$default" first-keystroke="control shift I"/>
-        </action>
-        <action id="I18nToolkit.CopyKey"
-                class="com.github.yelog.i18ntoolkit.action.I18nCopyKeyAction"
-                text="Copy I18n Key"
-                description="Copy current i18n key"/>
-        <action id="I18nToolkit.NavigateToFile"
-                class="com.github.yelog.i18ntoolkit.action.I18nNavigateToFileAction"
-                text="Navigate to I18n File"
-                description="Navigate to translation file for current i18n key">
-            <keyboard-shortcut keymap="$default" first-keystroke="control J"/>
         </action>
     </actions>
 </idea-plugin>
