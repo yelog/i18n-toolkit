@@ -3,11 +3,12 @@ package com.github.yelog.i18ntoolkit.listener
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
-import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.util.Key
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
@@ -21,6 +22,11 @@ import javax.swing.Timer
  * only fires on VFS (disk-level) changes.
  */
 class I18nDocumentListenerRegistrar : ProjectActivity {
+
+    companion object {
+        // User data key to mark documents that already have our listener attached
+        private val LISTENER_ATTACHED_KEY = Key.create<Boolean>("I18nDocumentListenerAttached")
+    }
 
     override suspend fun execute(project: com.intellij.openapi.project.Project) {
         val debounceTimer = AtomicReference<Timer?>(null)
@@ -46,9 +52,11 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
 
         val editorFactoryListener = object : EditorFactoryListener {
             override fun editorCreated(event: EditorFactoryEvent) {
-                val file = FileDocumentManager.getInstance().getFile(event.editor.document) ?: return
+                val document = event.editor.document
+                val file = FileDocumentManager.getInstance().getFile(document) ?: return
+
                 if (I18nDirectoryScanner.isTranslationFile(file)) {
-                    event.editor.document.addDocumentListener(docListener, project)
+                    attachListenerToDocument(document, docListener, project)
                 }
             }
         }
@@ -58,9 +66,11 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
 
         // Attach to already-open editors
         for (editor in EditorFactory.getInstance().allEditors) {
-            val file = FileDocumentManager.getInstance().getFile(editor.document) ?: continue
+            val document = editor.document
+            val file = FileDocumentManager.getInstance().getFile(document) ?: continue
+
             if (I18nDirectoryScanner.isTranslationFile(file)) {
-                editor.document.addDocumentListener(docListener, project)
+                attachListenerToDocument(document, docListener, project)
             }
         }
 
@@ -68,5 +78,24 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
         Disposer.register(project) {
             debounceTimer.get()?.stop()
         }
+    }
+
+    /**
+     * Attach listener to document only if not already attached.
+     * Uses user data to track whether the listener has been added.
+     */
+    private fun attachListenerToDocument(
+        document: Document,
+        listener: DocumentListener,
+        project: com.intellij.openapi.project.Project
+    ) {
+        // Check if listener is already attached
+        if (document.getUserData(LISTENER_ATTACHED_KEY) == true) {
+            return
+        }
+
+        // Mark as attached and add the listener
+        document.putUserData(LISTENER_ATTACHED_KEY, true)
+        document.addDocumentListener(listener, project)
     }
 }
