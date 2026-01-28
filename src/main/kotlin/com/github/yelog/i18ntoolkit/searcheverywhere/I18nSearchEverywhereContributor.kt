@@ -316,7 +316,7 @@ private class I18nSearchEverywhereRenderer(
         val compactPattern = compactString(pattern)
 
         // Display key first (as main search content)
-        appendWithHighlight(value.key, tokens, compactPattern, SimpleTextAttributes.REGULAR_BOLD_ATTRIBUTES, selected)
+        appendWithHighlight(value.key, tokens, compactPattern, SimpleTextAttributes.REGULAR_ATTRIBUTES, selected)
         append("  ", SimpleTextAttributes.REGULAR_ATTRIBUTES)
 
         // Get display locale from settings
