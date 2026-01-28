@@ -77,7 +77,7 @@ class I18nSearchEverywhereContributor(
         if (query.isEmpty()) return
 
         val tokens = tokenizePattern(query)
-        val compactQuery = compactString(query)
+        val compactQuery = compactString(query, preserveDot = false)
         if (tokens.isEmpty() && compactQuery.isEmpty()) return
 
         val cacheService = I18nCacheService.getInstance(project)
@@ -140,8 +140,8 @@ class I18nSearchEverywhereContributor(
     ): Int {
         val keyLower = key.lowercase(Locale.ROOT)
         val valuesLower = entries.map { it.value.lowercase(Locale.ROOT) }
-        val keyCompact = compactString(keyLower)
-        val valuesCompact = entries.map { compactString(it.value) }
+        val keyCompact = compactString(keyLower, preserveDot = false)
+        val valuesCompact = entries.map { compactString(it.value, preserveDot = false) }
 
         val tokenMatch = tokens.isNotEmpty() && tokens.all { token ->
             keyLower.contains(token) || valuesLower.any { it.contains(token) }
@@ -313,7 +313,7 @@ private class I18nSearchEverywhereRenderer(
 
         val pattern = patternProvider()
         val tokens = tokenizePattern(pattern)
-        val compactPattern = compactString(pattern)
+        val compactPattern = compactString(pattern, preserveDot = false)
 
         // Display key first (as main search content)
         appendWithHighlight(value.key, tokens, compactPattern, SimpleTextAttributes.REGULAR_ATTRIBUTES, selected)
@@ -454,8 +454,9 @@ private class I18nSearchEverywhereRenderer(
     }
 }
 
-private val TOKEN_SPLIT_REGEX = Regex("[\\s\\p{Punct}_]+")
-private val PUNCT_CHAR_REGEX = Regex("\\p{Punct}")
+private val TOKEN_SPLIT_REGEX = Regex("[\\s_]+|[\\p{Punct}&&[^.]]+")
+private val SEPARATOR_REGEX = Regex("[\\s_]+|\\p{Punct}+")
+private val SEPARATOR_REGEX_EXCEPT_DOT = Regex("[\\s_]+|[\\p{Punct}&&[^.]]+")
 
 private fun tokenizePattern(pattern: String): List<String> {
     return pattern.lowercase(Locale.ROOT)
@@ -463,8 +464,9 @@ private fun tokenizePattern(pattern: String): List<String> {
         .filter { it.isNotEmpty() }
 }
 
-private fun compactString(value: String): String {
-    return value.lowercase(Locale.ROOT).replace(TOKEN_SPLIT_REGEX, "")
+private fun compactString(value: String, preserveDot: Boolean): String {
+    val regex = if (preserveDot) SEPARATOR_REGEX_EXCEPT_DOT else SEPARATOR_REGEX
+    return value.lowercase(Locale.ROOT).replace(regex, "")
 }
 
 private fun isSubsequence(needle: String, haystack: String): Boolean {
@@ -481,7 +483,7 @@ private fun isSubsequence(needle: String, haystack: String): Boolean {
 
 private fun findCompactMatchRanges(text: String, compactPattern: String): List<IntRange> {
     if (compactPattern.isEmpty()) return emptyList()
-    val (compactText, indexMap) = buildCompactTextAndIndexMap(text)
+    val (compactText, indexMap) = buildCompactTextAndIndexMap(text, preserveDot = false)
     if (compactText.isEmpty()) return emptyList()
 
     val needle = compactPattern.lowercase(Locale.ROOT)
@@ -497,11 +499,11 @@ private fun findCompactMatchRanges(text: String, compactPattern: String): List<I
     return buildRangesFromOriginalIndices(subsequenceIndices)
 }
 
-private fun buildCompactTextAndIndexMap(text: String): Pair<String, List<Int>> {
+private fun buildCompactTextAndIndexMap(text: String, preserveDot: Boolean): Pair<String, List<Int>> {
     val compact = StringBuilder(text.length)
     val indexMap = ArrayList<Int>(text.length)
     text.forEachIndexed { index, ch ->
-        if (!isSeparatorChar(ch)) {
+        if (!isSeparatorChar(ch, preserveDot)) {
             compact.append(ch.lowercaseChar())
             indexMap.add(index)
         }
@@ -509,8 +511,11 @@ private fun buildCompactTextAndIndexMap(text: String): Pair<String, List<Int>> {
     return compact.toString() to indexMap
 }
 
-private fun isSeparatorChar(ch: Char): Boolean {
-    return ch == '_' || ch.isWhitespace() || PUNCT_CHAR_REGEX.matches(ch.toString())
+private fun isSeparatorChar(ch: Char, preserveDot: Boolean): Boolean {
+    if (ch == '_') return true
+    if (ch.isWhitespace()) return true
+    if (preserveDot && ch == '.') return false
+    return ch.toString().matches(Regex("\\p{Punct}"))
 }
 
 private fun buildRangesFromCompactSpan(indexMap: List<Int>, start: Int, end: Int): List<IntRange> {
