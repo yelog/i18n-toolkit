@@ -92,13 +92,16 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
         val settings = I18nSettingsState.getInstance(project)
         val displayLocale = settings.getDisplayLocaleOrNull()
 
-        // Try extracting key from i18n function call first, then from translation file
+        // Try extracting key from string literal in i18n call first,
+        // then from translation file property keys (JSON/JS/TS)
+        val containingFile = target.containingFile ?: return null
         val keys = extractI18nKeys(target)
-            ?: I18nKeyExtractor.findKeyAtOffset(
-                target.containingFile ?: return null,
-                target.textOffset,
-                cacheService
-            )?.let { Pair(it.fullKey, it.partialKey) }
+            ?: run {
+                val vf = containingFile.virtualFile ?: return@run null
+                if (!com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner.isTranslationFile(vf)) return@run null
+                I18nKeyExtractor.findKeyAtOffset(containingFile, target.textOffset, cacheService)
+                    ?.let { Pair(it.fullKey, it.partialKey) }
+            }
             ?: return null
 
         val (fullKey, partialKey) = keys
@@ -138,18 +141,6 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
             val call = PsiTreeUtil.getParentOfType(literal, JSCallExpression::class.java)
             if (call != null && isI18nCall(call)) {
                 val partialKey = literal.stringValue ?: return null
-                val fullKey = I18nNamespaceResolver.getFullKey(call, partialKey)
-                return Pair(fullKey, partialKey)
-            }
-        }
-
-        // Check if we're in an i18n call expression
-        val call = PsiTreeUtil.getParentOfType(element, JSCallExpression::class.java, false)
-        if (call != null && isI18nCall(call)) {
-            val args = call.arguments
-            if (args.isNotEmpty()) {
-                val firstArg = args[0] as? JSLiteralExpression
-                val partialKey = firstArg?.stringValue ?: return null
                 val fullKey = I18nNamespaceResolver.getFullKey(call, partialKey)
                 return Pair(fullKey, partialKey)
             }
