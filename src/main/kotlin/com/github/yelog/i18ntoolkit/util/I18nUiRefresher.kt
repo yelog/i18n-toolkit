@@ -7,6 +7,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.WindowManager
+import com.intellij.psi.PsiManager
 import com.intellij.util.FileContentUtil
 
 object I18nUiRefresher {
@@ -28,11 +29,9 @@ object I18nUiRefresher {
 
             if (openFiles.isNotEmpty()) {
                 // Reparse files to force rebuild of inlay hints and folding regions
+                // This will automatically trigger daemon analysis and refresh all annotations/hints
                 FileContentUtil.reparseFiles(project, openFiles, true)
             }
-
-            // Also restart daemon for good measure
-            DaemonCodeAnalyzer.getInstance(project).restart()
 
             // Update status bar widget
             updateStatusBarWidget(project)

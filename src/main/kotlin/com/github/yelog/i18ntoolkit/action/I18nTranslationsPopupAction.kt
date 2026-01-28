@@ -16,15 +16,9 @@ class I18nTranslationsPopupAction : AnAction() {
         val initialQuery = editor?.selectionModel?.selectedText?.trim() ?: ""
 
         val manager = SearchEverywhereManager.getInstance(project)
-        if (manager.isShown) {
-            manager.setSelectedTabID(I18nSearchEverywhereContributor.SEARCH_PROVIDER_ID)
-            val ui = manager.currentlyShownUI
-            if (ui != null && initialQuery.isNotEmpty()) {
-                ui.searchField.text = initialQuery
-            }
-            return
-        }
 
+        // Always show the Search Everywhere dialog with our tab selected and initial query
+        // This approach avoids using the deprecated getCurrentlyShownUI() method
         manager.show(I18nSearchEverywhereContributor.SEARCH_PROVIDER_ID, initialQuery, e)
     }
 

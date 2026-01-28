@@ -41,7 +41,10 @@ class I18nDynamicPluginListener : DynamicPluginListener {
         // No cleanup needed - services will be disposed automatically
     }
 
-    // Explicitly override deprecated methods to prevent Kotlin from generating super calls
+    // Explicitly override deprecated/experimental methods to prevent Kotlin from generating super calls
+    // These overrides ensure compatibility with older IDE versions where default implementations don't exist
+
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun checkUnloadPlugin(pluginDescriptor: IdeaPluginDescriptor) {
         // No-op: default behavior is acceptable
     }
