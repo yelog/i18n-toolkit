@@ -7,11 +7,16 @@ import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.intellij.codeInsight.hints.*
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
 import com.intellij.codeInsight.hints.presentation.PresentationFactory
+import com.intellij.lang.Language
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.fileTypes.FileType
+import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiFileFactory
 import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.psi.PsiElement
 import javax.swing.JComponent
@@ -64,6 +69,20 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
         val filePath = file.virtualFile?.path ?: ""
         val modStamp = file.modificationStamp
         return I18nInlayHintsCollector(editor, filePath, modStamp)
+    }
+
+    // Override these methods to prevent Kotlin from generating super calls to interface default methods
+    // that may not exist in older IDE versions (compatibility with 2023.1+)
+    override fun getSettingsLanguage(language: Language): Language {
+        // Return the provided language for settings
+        return language
+    }
+
+    override fun createFile(project: Project, fileType: FileType, document: Document): PsiFile {
+        // Create a file using JavaScript language for preview
+        val language = Language.findLanguageByID("JavaScript") ?: Language.ANY
+        return PsiFileFactory.getInstance(project)
+            .createFileFromText("preview.js", language, document.text)
     }
 
     private class I18nInlayHintsCollector(

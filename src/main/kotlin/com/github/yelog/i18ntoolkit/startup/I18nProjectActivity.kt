@@ -21,6 +21,7 @@ class I18nProjectActivity : ProjectActivity {
  * Listener for dynamic plugin loading - initializes cache when plugin is loaded
  * without requiring IDE restart
  */
+@Suppress("removal")
 class I18nDynamicPluginListener : DynamicPluginListener {
 
     override fun pluginLoaded(pluginDescriptor: IdeaPluginDescriptor) {
@@ -38,5 +39,26 @@ class I18nDynamicPluginListener : DynamicPluginListener {
 
     override fun beforePluginUnload(pluginDescriptor: IdeaPluginDescriptor, isUpdate: Boolean) {
         // No cleanup needed - services will be disposed automatically
+    }
+
+    // Explicitly override deprecated methods to prevent Kotlin from generating super calls
+    override fun checkUnloadPlugin(pluginDescriptor: IdeaPluginDescriptor) {
+        // No-op: default behavior is acceptable
+    }
+
+    override fun beforePluginLoaded(pluginDescriptor: IdeaPluginDescriptor) {
+        // No-op: we don't need to do anything before plugin loads
+    }
+
+    override fun pluginUnloaded(pluginDescriptor: IdeaPluginDescriptor, isUpdate: Boolean) {
+        // No-op: cleanup is handled automatically
+    }
+
+    override fun beforePluginsLoaded() {
+        // No-op: we don't need to do anything before plugins load
+    }
+
+    override fun pluginsLoaded() {
+        // No-op: initialization is handled in pluginLoaded()
     }
 }
