@@ -145,17 +145,21 @@ class I18nGotoDeclarationHandler : GotoDeclarationHandler {
 
     /**
      * Returns a pair of (fullKey, partialKey) where fullKey includes namespace prefix
+     * Only returns keys if the offset is within the string literal (including quotes),
+     * not on the method name itself
      */
     private fun findI18nKeyAtOffset(psiFile: PsiElement, offset: Int): Pair<String, String>? {
-        // Try to find JSLiteralExpression at offset
+        // Try to find element at offset
         var element = psiFile.findElementAt(offset)
 
-        // Walk up to find JSCallExpression
+        // Walk up to find JSLiteralExpression
         while (element != null) {
-            if (element is JSCallExpression) {
-                return extractI18nKeys(element)
-            }
             if (element is JSLiteralExpression) {
+                // Check if offset is within the literal's text range (including quotes)
+                if (!element.textRange.contains(offset)) {
+                    return null
+                }
+
                 val call = PsiTreeUtil.getParentOfType(element, JSCallExpression::class.java)
                 if (call != null) {
                     return extractI18nKeys(call)
@@ -165,13 +169,21 @@ class I18nGotoDeclarationHandler : GotoDeclarationHandler {
         }
 
         // Also try searching in a range around the offset (for folded regions)
+        // But still check if offset is within the literal
         val searchRange = maxOf(0, offset - 50)..minOf(psiFile.textLength, offset + 50)
         val calls = PsiTreeUtil.findChildrenOfType(psiFile, JSCallExpression::class.java)
         for (call in calls) {
             if (call.textRange.startOffset in searchRange || call.textRange.endOffset in searchRange) {
-                val keys = extractI18nKeys(call)
-                if (keys != null && call.textRange.contains(offset)) {
-                    return keys
+                val args = call.arguments
+                if (args.isNotEmpty()) {
+                    val firstArg = args[0]
+                    // Only navigate if clicking within the string literal argument
+                    if (firstArg is JSLiteralExpression && firstArg.textRange.contains(offset)) {
+                        val keys = extractI18nKeys(call)
+                        if (keys != null && call.textRange.contains(offset)) {
+                            return keys
+                        }
+                    }
                 }
             }
         }
