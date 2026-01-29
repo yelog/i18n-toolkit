@@ -8,6 +8,11 @@
 
 面向 JetBrains IDE 的 JavaScript/TypeScript i18n 生产力插件：补全、预览、导航、搜索与诊断一体化。
 
+**最新更新 (v0.0.2)**
+- 修复导航行为：Cmd+点击函数名保持默认行为（跳转方法声明）
+- 翻译搜索弹窗记住上次查询，快速重复过滤
+- [完整更新日志](CHANGELOG.md)
+
 ## 目录
 - [功能概览](#功能概览)
 - [快速开始](#快速开始)
@@ -21,12 +26,25 @@
 - [许可证](#许可证)
 
 ## 功能概览
-- 智能补全：在 `t()` / `$t()` 等函数中提供 i18n key 列表，支持按显示语言翻译匹配
-- 翻译预览：内联提示（Inlay）或“仅翻译模式”（折叠原 key 显示翻译）
-- 语义导航：Goto Declaration / Goto Implementation，Cmd+Click 跳转
-- 跨语言跳转：翻译文件行标记快速跳转到其他语言
-- 质量与修复：缺失 key 标红并支持一键创建（JSON/JS/TS/Properties）
-- 搜索与效率：Search Everywhere 标签页、翻译弹窗、复制 key、状态栏切换语言
+
+### 代码智能
+- **智能补全**：在 `t()` / `$t()` 等函数中自动补全 i18n key，支持按显示语言翻译匹配
+- **翻译预览**：通过内联提示（Inlay）或仅翻译折叠模式查看翻译内容
+- **缺失 Key 检测**：高亮显示未定义的 i18n key，一键快速创建翻译（支持 JSON/JS/TS/Properties）
+
+### 导航功能
+- **跳转到定义**：Cmd+点击 i18n key 字符串（非函数名）导航到翻译文件
+- **跳转到实现**：查看所有语言版本的翻译实现
+- **跨语言导航**：在翻译文件中快速切换到其他语言版本
+- **查找使用**：查找特定翻译 key 在代码中的所有使用位置
+
+### 搜索与发现
+- **Search Everywhere 集成**：专用"I18n"标签页，支持 key 和翻译的模糊搜索
+  - 按 Enter 复制 key 到剪贴板
+  - 按 Ctrl+Enter 导航到翻译文件
+  - 记住上次搜索查询，快速重复过滤
+- **状态栏小部件**：IDE 状态栏快速语言切换器
+- **快速文档**：悬停在 i18n key 上查看所有翻译
 
 ## 快速开始
 1. 将语言文件放在标准目录中（如 `locales` / `i18n` / `messages` 等），插件会自动扫描与缓存
@@ -105,35 +123,83 @@ t('profile.name') // 实际匹配 user.profile.name
 | Copy I18n Key | 复制光标处 key | 未绑定 |
 
 ## 搜索与导航
-- Goto Declaration / Goto Implementation 从 key 使用处跳转到翻译定义
-- Cmd+Click 直接导航
-- Find Usages 从翻译文件反查使用位置
-- Search Everywhere: `I18n` 标签页支持 key 与翻译模糊搜索
-  - Enter: 复制 key
-  - Ctrl+Enter: 打开翻译文件
+- **跳转到声明/实现**：从代码中的 key 使用处导航到翻译文件
+- **Cmd+Click 导航**：点击 i18n key 字符串（非函数名）跳转到翻译定义
+  - 点击 `t('key')` 中的 `t` 保持默认行为（跳转方法声明）
+  - 点击 `'key'` 打开翻译选择器（如果存在多个语言版本）
+- **查找使用**：从翻译文件中查找所有使用特定 key 的代码位置
+- **Search Everywhere**：使用专用 `I18n` 标签页模糊搜索 key 和翻译
+  - Enter：复制 key 到剪贴板
+  - Ctrl+Enter：打开翻译文件
+  - 记住上次搜索查询，快速重复过滤
 
 ## FAQ
-**补全没有出现 / 翻译未显示？**
-- 确认语言文件位于标准目录且格式受支持
-- 在设置中检查 `Custom I18n Functions`
-- 确认已选择显示语言或索引完成
 
-**翻译文件更新后未生效？**
-- 插件会监听文件变化自动刷新
-- 如需强制刷新，可重启 IDE 或重新打开项目
+**问：补全没有出现或翻译未显示？**
+- 确认语言文件位于标准目录（`locales`、`i18n`、`lang` 等）且为支持的格式（JSON、YAML、JS、TS 等）
+- 在设置中检查 `Custom I18n Functions`，如使用自定义函数名需添加
+- 确认索引已完成且在设置中选择了显示语言
+- 验证 i18n 框架是否被检测到（检查状态栏或设置）
+
+**问：翻译文件更新后未生效？**
+- 插件会监听文件变化并自动刷新缓存
+- 如果变化未被检测到，尝试重新打开文件或项目
+- 对于大型项目，初始扫描可能需要几秒钟
+
+**问：导航时函数名和 key 都显示"Choose Declaration"？**
+- 此问题已在 0.0.2 版本中修复
+- 更新到最新版本，导航仅在点击 key 字符串本身时触发
+- 点击函数名（如 `t`）将保持默认 IDE 行为
+
+**问：如何添加对自定义 i18n 函数的支持？**
+- 进入 `设置` -> `I18n Toolkit` -> `Custom i18n functions`
+- 添加您的函数名，用逗号分隔（如 `t, $t, translate, __`）
+- 插件将识别这些函数进行补全和导航
+
+**问：可以在非 JavaScript 项目中使用吗？**
+- 目前插件主要针对 JavaScript/TypeScript 框架
+- 包含对 Java 项目的 Spring Message 支持
+- 其他语言可能在未来版本中添加
+
+**问：如何报告问题或请求功能？**
+- 访问 [GitHub Issues](https://github.com/yelog/i18n-toolkit/issues) 页面
+- 提供您的设置、框架和遇到的问题的详细信息
 
 ## 开发与构建
+
+### 环境要求
 - JDK: 21
 - Gradle: 9.2.1（请使用 `./gradlew`）
 - IntelliJ Platform: 2025.2.5
 
-常用命令：
+### 构建命令
 ```bash
-./gradlew buildPlugin
-./gradlew test
-./gradlew check
-./gradlew runIde
+./gradlew buildPlugin          # 构建可分发的 ZIP 文件
+./gradlew test                 # 运行测试
+./gradlew check                # 运行测试并生成覆盖率报告
+./gradlew verifyPlugin         # 验证插件兼容性
+./gradlew runIde               # 启动带插件的 IDE 沙箱
 ```
+
+### 项目结构
+- `src/main/kotlin/com/github/yelog/i18ntoolkit/` - 源代码
+  - `service/` - 缓存服务和核心逻辑
+  - `hint/` - 内联提示提供者
+  - `reference/` - 引用贡献者（导航）
+  - `completion/` - 代码补全
+  - `navigation/` - 跳转到声明/实现
+  - `searcheverywhere/` - Search Everywhere 集成
+  - `settings/` - 插件设置
+- 详见 [CLAUDE.md](CLAUDE.md) 了解详细架构和开发指南
+
+### 贡献指南
+欢迎贡献！请：
+1. Fork 仓库
+2. 创建功能分支
+3. 提交前运行 `./gradlew check`
+4. 提交带有清晰描述的 Pull Request
+
+如需报告 Bug 或请求功能，请使用 [GitHub Issues](https://github.com/yelog/i18n-toolkit/issues)。
 
 ## 许可证
 Apache License 2.0，详见 `LICENSE`。

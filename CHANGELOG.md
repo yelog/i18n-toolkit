@@ -2,6 +2,15 @@
 
 # i18n-toolkit Changelog
 
+## 0.0.2
+### Fixed
+- Navigation behavior: Cmd+Click on i18n function name (e.g., `t`) now preserves default behavior (jump to method declaration) instead of showing translation chooser
+- Navigation now only triggers when clicking on the i18n key string or its quotes, not on the function name
+
+### Added
+- Translation search popup now remembers last search query and results when reopened
+- Search query text is automatically selected for quick replacement when popup opens
+
 ## 0.0.1
 ### Added
 

@@ -17,6 +17,28 @@
     </ul>
     ]]></description>
 
+    <change-notes><![CDATA[
+    <h3>0.0.2</h3>
+    <h4>Fixed</h4>
+    <ul>
+        <li>Navigation behavior: Cmd+Click on i18n function name (e.g., <code>t</code>) now preserves default behavior (jump to method declaration) instead of showing translation chooser</li>
+        <li>Navigation now only triggers when clicking on the i18n key string or its quotes, not on the function name</li>
+    </ul>
+    <h4>Added</h4>
+    <ul>
+        <li>Translation search popup now remembers last search query and results when reopened</li>
+        <li>Search query text is automatically selected for quick replacement when popup opens</li>
+    </ul>
+
+    <h3>0.0.1</h3>
+    <ul>
+        <li>Auto-detects popular i18n frameworks and scans multi-format locale files</li>
+        <li>Smart key completion with display-language translation matching</li>
+        <li>Inline translation preview, Quick Documentation, and translation search popup</li>
+        <li>Go to Declaration/Implementation, cross-locale navigation, and Find Usages</li>
+    </ul>
+    ]]></change-notes>
+
     <depends>com.intellij.modules.platform</depends>
     <depends>JavaScript</depends>
 
