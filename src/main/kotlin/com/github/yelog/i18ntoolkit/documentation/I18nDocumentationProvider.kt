@@ -6,6 +6,7 @@ import com.github.yelog.i18ntoolkit.util.I18nKeyExtractor
 import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.intellij.lang.documentation.AbstractDocumentationProvider
 import com.intellij.lang.documentation.DocumentationMarkup
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
@@ -125,6 +126,21 @@ class I18nDocumentationProvider : AbstractDocumentationProvider() {
      * Returns a pair of (fullKey, partialKey) where fullKey includes namespace prefix
      */
     private fun extractI18nKeys(element: PsiElement): Pair<String, String>? {
+        // First try to extract from the element directly (for JS/TS files)
+        extractFromJsElement(element)?.let { return it }
+
+        // Check if element is inside an injected language fragment (e.g., Vue templates)
+        val containingFile = element.containingFile ?: return null
+        val injectedManager = InjectedLanguageManager.getInstance(element.project)
+        val injectedElement = injectedManager.findInjectedElementAt(containingFile, element.textOffset)
+        if (injectedElement != null) {
+            extractFromJsElement(injectedElement)?.let { return it }
+        }
+
+        return null
+    }
+
+    private fun extractFromJsElement(element: PsiElement): Pair<String, String>? {
         // If element is a string literal in i18n function call
         if (element is JSLiteralExpression) {
             val call = PsiTreeUtil.getParentOfType(element, JSCallExpression::class.java)

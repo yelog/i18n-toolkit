@@ -8,6 +8,7 @@ import com.intellij.codeInsight.hints.*
 import com.intellij.codeInsight.hints.presentation.InlayPresentation
 import com.intellij.codeInsight.hints.presentation.PresentationFactory
 import com.intellij.lang.Language
+import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
@@ -15,10 +16,10 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileTypes.FileType
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiFileFactory
-import com.intellij.lang.injection.InjectedLanguageManager
-import com.intellij.psi.PsiElement
+import com.intellij.psi.util.PsiTreeUtil
 import javax.swing.JComponent
 import javax.swing.JPanel
 
@@ -68,7 +69,7 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
     ): InlayHintsCollector {
         val filePath = file.virtualFile?.path ?: ""
         val modStamp = file.modificationStamp
-        return I18nInlayHintsCollector(editor, filePath, modStamp)
+        return I18nInlayHintsCollector(editor, filePath, modStamp, file)
     }
 
     // Override these methods to prevent Kotlin from generating super calls to interface default methods
@@ -88,21 +89,74 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
     private class I18nInlayHintsCollector(
         editor: Editor,
         private val filePath: String,
-        private val modStamp: Long
+        private val modStamp: Long,
+        private val hostFile: PsiFile
     ) : FactoryInlayHintsCollector(editor) {
 
         private val i18nFunctions = setOf("t", "\$t", "i18n", "i18next", "translate", "formatMessage")
+        private var injectedFragmentsProcessed = false
 
         override fun collect(element: PsiElement, editor: Editor, sink: InlayHintsSink): Boolean {
+            // Process injected language fragments once (for Vue template interpolations like {{ t('key') }})
+            if (!injectedFragmentsProcessed) {
+                injectedFragmentsProcessed = true
+                processInjectedFragments(editor, sink)
+            }
+
             if (element !is JSCallExpression) return true
 
-            val methodExpr = element.methodExpression as? JSReferenceExpression ?: return true
-            val methodName = methodExpr.referenceName ?: return true
+            processI18nCall(element, editor, sink)
+            return true
+        }
 
-            if (!i18nFunctions.contains(methodName)) return true
+        private fun processInjectedFragments(editor: Editor, sink: InlayHintsSink) {
+            val project = hostFile.project
+            val injectedManager = InjectedLanguageManager.getInstance(project)
+
+            // Process ALL JSCallExpression in the host file (handles script section and some embedded JS)
+            val allCallsInHost = PsiTreeUtil.findChildrenOfType(hostFile, JSCallExpression::class.java)
+            for (call in allCallsInHost) {
+                processI18nCall(call, editor, sink)
+            }
+
+            // Process injected language fragments (for {{ }} interpolations in Vue templates)
+            hostFile.accept(object : com.intellij.psi.PsiRecursiveElementVisitor() {
+                override fun visitElement(element: PsiElement) {
+                    super.visitElement(element)
+                    // Try to get injected files for any element that might be an injection host
+                    try {
+                        val injectedFiles = injectedManager.getInjectedPsiFiles(element)
+                        injectedFiles?.forEach { pair ->
+                            val injectedFile = pair.first
+                            val calls = PsiTreeUtil.findChildrenOfType(injectedFile, JSCallExpression::class.java)
+                            for (call in calls) {
+                                processI18nCall(call, editor, sink)
+                            }
+                        }
+                    } catch (_: Exception) {
+                        // Ignore elements that don't support injection
+                    }
+
+                    // Also try findInjectedElementAt for the element's position
+                    val injectedElement = injectedManager.findInjectedElementAt(hostFile, element.textOffset)
+                    if (injectedElement != null) {
+                        val injectedCalls = PsiTreeUtil.findChildrenOfType(injectedElement.containingFile, JSCallExpression::class.java)
+                        for (call in injectedCalls) {
+                            processI18nCall(call, editor, sink)
+                        }
+                    }
+                }
+            })
+        }
+
+        private fun processI18nCall(element: JSCallExpression, editor: Editor, sink: InlayHintsSink) {
+            val methodExpr = element.methodExpression as? JSReferenceExpression ?: return
+            val methodName = methodExpr.referenceName ?: return
+
+            if (!i18nFunctions.contains(methodName)) return
 
             val args = element.arguments
-            if (args.isEmpty()) return true
+            if (args.isEmpty()) return
 
             val firstArg = args[0]
             val offset = getHostOffset(firstArg, firstArg.textRange.endOffset)
@@ -111,12 +165,12 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             // Key includes modification stamp so hints are refreshed when file changes
             val hintKey = "$filePath:$modStamp:$offset"
             checkAndCleanCache()
-            if (globalProcessedHints.putIfAbsent(hintKey, true) != null) return true
+            if (globalProcessedHints.putIfAbsent(hintKey, true) != null) return
 
             val partialKey = when (firstArg) {
                 is JSLiteralExpression -> firstArg.stringValue
                 else -> null
-            } ?: return true
+            } ?: return
 
             // Resolve full key including namespace from useTranslation hook
             val fullKey = I18nNamespaceResolver.getFullKey(element, partialKey)
@@ -124,7 +178,7 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             val project = element.project
             val cacheService = I18nCacheService.getInstance(project)
             val settings = I18nSettingsState.getInstance(project)
-            if (settings.state.displayMode == I18nDisplayMode.TRANSLATION_ONLY) return true
+            if (settings.state.displayMode == I18nDisplayMode.TRANSLATION_ONLY) return
 
             val locale = settings.getDisplayLocaleOrNull()
 
@@ -143,14 +197,14 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
                     if (hasAnyTranslation) {
                         "⚠ Missing translation for '$locale'"
                     } else {
-                        return true // Key doesn't exist at all, don't show hint
+                        return // Key doesn't exist at all, don't show hint
                     }
                 }
             } else {
                 // No display locale set, use any available translation
                 val translation = cacheService.getTranslation(fullKey, null)
                     ?: cacheService.getTranslation(partialKey, null)
-                    ?: return true
+                    ?: return
                 truncateText(translation.value, 50)
             }
 
@@ -162,8 +216,6 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
                 presentation,
                 false
             )
-
-            return true
         }
 
         private fun getHostOffset(element: PsiElement, injectedOffset: Int): Int {
