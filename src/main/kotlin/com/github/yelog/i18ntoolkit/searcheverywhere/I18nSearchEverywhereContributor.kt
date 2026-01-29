@@ -75,6 +75,13 @@ class I18nSearchEverywhereContributor(
     override fun fetchElements(pattern: String, indicator: ProgressIndicator, processor: Processor<in I18nSearchItem>) {
         val query = pattern.trim()
         currentPattern = query
+
+        // Save the current search query to settings
+        if (query.isNotEmpty()) {
+            val settings = I18nSettingsState.getInstance(project)
+            settings.state.lastSearchQuery = query
+        }
+
         if (query.isEmpty()) return
 
         val tokens = tokenizePattern(query)

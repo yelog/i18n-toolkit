@@ -5,15 +5,23 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.github.yelog.i18ntoolkit.searcheverywhere.I18nSearchEverywhereContributor
+import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
 
 class I18nTranslationsPopupAction : AnAction() {
 
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
 
-        // Get initial query: use selected text if available, otherwise empty string
+        // Get initial query: use selected text if available, otherwise use last search query
         val editor = e.getData(CommonDataKeys.EDITOR)
-        val initialQuery = editor?.selectionModel?.selectedText?.trim() ?: ""
+        val selectedText = editor?.selectionModel?.selectedText?.trim()
+
+        val settings = I18nSettingsState.getInstance(project)
+        val initialQuery = if (!selectedText.isNullOrEmpty()) {
+            selectedText
+        } else {
+            settings.state.lastSearchQuery
+        }
 
         val manager = SearchEverywhereManager.getInstance(project)
 

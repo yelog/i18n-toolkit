@@ -34,7 +34,8 @@ class I18nSettingsState(private val project: Project) : PersistentStateComponent
         var displayLocale: String = "",
         var displayMode: I18nDisplayMode = I18nDisplayMode.INLINE,
         var frameworkSetting: I18nFrameworkSetting = I18nFrameworkSetting.AUTO,
-        var customI18nFunctions: String = "t, \$t"
+        var customI18nFunctions: String = "t, \$t",
+        var lastSearchQuery: String = ""
     )
 
     private var state = State()
