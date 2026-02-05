@@ -2,6 +2,13 @@
 
 # i18n-toolkit Changelog
 
+## 0.0.3
+### Fixed
+- Inline translation hints not displaying when files are reopened after being closed
+- Inline translation hints not showing when IDEA starts with files already open (especially after long project loading times)
+- Inline translation hints disappearing after switching away from IDEA for an extended period and returning
+- Added intelligent cache clearing mechanism with 30-second threshold to avoid performance issues from frequent window switching
+
 ## 0.0.2
 ### Fixed
 - Navigation behavior: Cmd+Click on i18n function name (e.g., `t`) now preserves default behavior (jump to method declaration) instead of showing translation chooser

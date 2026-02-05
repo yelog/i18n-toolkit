@@ -18,6 +18,15 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.0.3</h3>
+    <h4>Fixed</h4>
+    <ul>
+        <li>Inline translation hints not displaying when files are reopened after being closed</li>
+        <li>Inline translation hints not showing when IDEA starts with files already open (especially after long project loading times)</li>
+        <li>Inline translation hints disappearing after switching away from IDEA for an extended period and returning</li>
+        <li>Added intelligent cache clearing mechanism with 30-second threshold to avoid performance issues from frequent window switching</li>
+    </ul>
+
     <h3>0.0.2</h3>
     <h4>Fixed</h4>
     <ul>
