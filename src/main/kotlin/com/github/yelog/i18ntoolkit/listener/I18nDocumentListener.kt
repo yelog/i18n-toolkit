@@ -1,5 +1,6 @@
 package com.github.yelog.i18ntoolkit.listener
 
+import com.github.yelog.i18ntoolkit.hint.I18nInlayHintsProvider
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
@@ -54,6 +55,10 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
             override fun editorCreated(event: EditorFactoryEvent) {
                 val document = event.editor.document
                 val file = FileDocumentManager.getInstance().getFile(document) ?: return
+
+                // Clear inlay hints cache for this specific file when it's opened
+                // This fixes the issue where hints don't show when a file is reopened
+                I18nInlayHintsProvider.clearCacheForFile(file.path)
 
                 if (I18nDirectoryScanner.isTranslationFile(file)) {
                     attachListenerToDocument(document, docListener, project)

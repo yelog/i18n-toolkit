@@ -41,6 +41,16 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             globalProcessedHints.clear()
         }
 
+        /**
+         * Clear cache entries for a specific file path.
+         * This allows hints to be re-rendered when a file is reopened.
+         */
+        fun clearCacheForFile(filePath: String) {
+            globalProcessedHints.keys.removeIf { key ->
+                key.startsWith("$filePath:")
+            }
+        }
+
         private fun checkAndCleanCache() {
             // Prevent memory leak by clearing cache when it gets too large
             if (globalProcessedHints.size > MAX_CACHE_SIZE) {
