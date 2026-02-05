@@ -69,7 +69,7 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
         // Register for future editors
         EditorFactory.getInstance().addEditorFactoryListener(editorFactoryListener, project)
 
-        // Attach to already-open editors
+        // Process already-open editors
         for (editor in EditorFactory.getInstance().allEditors) {
             val document = editor.document
             val file = FileDocumentManager.getInstance().getFile(document) ?: continue
@@ -78,6 +78,11 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
                 attachListenerToDocument(document, docListener, project)
             }
         }
+
+        // Trigger UI refresh for already-open files
+        // This clears the inlay hints cache and reparses all open files
+        // Fixes the issue where hints don't show when IDEA starts with files already open
+        I18nUiRefresher.refresh(project)
 
         // Clean up debounce timer on project dispose
         Disposer.register(project) {

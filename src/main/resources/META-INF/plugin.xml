@@ -48,6 +48,9 @@
         <!-- Dynamic plugin loading listener - no restart required -->
         <listener class="com.github.yelog.i18ntoolkit.startup.I18nDynamicPluginListener"
                   topic="com.intellij.ide.plugins.DynamicPluginListener"/>
+        <!-- Application activation listener - refreshes hints when returning to IDEA -->
+        <listener class="com.github.yelog.i18ntoolkit.listener.I18nApplicationActivationListener"
+                  topic="com.intellij.openapi.application.ApplicationActivationListener"/>
     </applicationListeners>
 
     <extensions defaultExtensionNs="com.intellij">
