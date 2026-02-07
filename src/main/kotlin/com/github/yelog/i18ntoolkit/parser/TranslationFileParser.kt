@@ -224,18 +224,19 @@ object TranslationFileParser {
         val entries = mutableMapOf<String, TranslationEntry>()
         try {
             val content = String(file.contentsToByteArray(), Charsets.UTF_8)
-            val properties = Properties()
-            properties.load(StringReader(content))
-            
+
             var offset = 0
             content.lines().forEach { line ->
-                if (line.isNotBlank() && !line.trimStart().startsWith("#")) {
-                    val equalIndex = line.indexOf('=')
-                    if (equalIndex > 0) {
-                        val key = line.substring(0, equalIndex).trim()
-                        val value = line.substring(equalIndex + 1).trim()
+                val trimmed = line.trimStart()
+                if (trimmed.isNotBlank() && !trimmed.startsWith("#") && !trimmed.startsWith("!")) {
+                    val separatorIndex = findPropertySeparator(line)
+                    if (separatorIndex > 0) {
+                        val rawKey = line.substring(0, separatorIndex).trim()
+                        val rawValue = line.substring(separatorIndex + 1).trimStart()
+                        val key = unescapePropertiesText(rawKey)
+                        val value = unescapePropertiesText(rawValue)
                         val fullKey = if (keyPrefix.isEmpty()) key else "$keyPrefix$key"
-                        
+
                         entries[fullKey] = TranslationEntry(
                             key = fullKey,
                             value = value,
@@ -251,6 +252,76 @@ object TranslationFileParser {
         } catch (_: Exception) {
         }
         return entries
+    }
+
+    private fun findPropertySeparator(line: String): Int {
+        var escaped = false
+        for (i in line.indices) {
+            val ch = line[i]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            when (ch) {
+                '\\' -> escaped = true
+                '=', ':' -> return i
+            }
+        }
+
+        escaped = false
+        for (i in line.indices) {
+            val ch = line[i]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (ch == '\\') {
+                escaped = true
+                continue
+            }
+            if (ch.isWhitespace()) return i
+        }
+        return -1
+    }
+
+    private fun unescapePropertiesText(text: String): String {
+        if (!text.contains('\\')) return text
+
+        val sb = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            val ch = text[i]
+            if (ch != '\\' || i == text.lastIndex) {
+                sb.append(ch)
+                i++
+                continue
+            }
+
+            val next = text[i + 1]
+            when (next) {
+                't' -> sb.append('\t')
+                'r' -> sb.append('\r')
+                'n' -> sb.append('\n')
+                'f' -> sb.append('\u000C')
+                '\\' -> sb.append('\\')
+                ' ', ':', '=', '#', '!' -> sb.append(next)
+                'u' -> {
+                    if (i + 5 < text.length) {
+                        val hex = text.substring(i + 2, i + 6)
+                        val code = hex.toIntOrNull(16)
+                        if (code != null) {
+                            sb.append(code.toChar())
+                            i += 6
+                            continue
+                        }
+                    }
+                    sb.append("\\u")
+                }
+                else -> sb.append(next)
+            }
+            i += 2
+        }
+        return sb.toString()
     }
 
     private fun parseTomlFile(

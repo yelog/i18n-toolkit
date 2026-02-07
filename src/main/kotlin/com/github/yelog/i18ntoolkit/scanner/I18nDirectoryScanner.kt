@@ -10,12 +10,14 @@ import com.intellij.openapi.vfs.VfsUtil
 
 object I18nDirectoryScanner {
 
-    private val excludedDirNames = setOf("node_modules", "dist", "build")
+    private val excludedDirNames = setOf("node_modules", "dist", "build", "target", "out")
 
     /**
-     * Regex pattern for Spring message bundle files: messages.properties, messages_zh_CN.properties, etc.
+     * Regex pattern for Spring locale message bundle files:
+     * messages_en_US.properties, messages_zh_CN.properties, messages-en.properties, etc.
      */
-    private val SPRING_MESSAGE_PATTERN = Regex("^messages(_[a-zA-Z]{2}(_[a-zA-Z]{2})?)?\\.properties$")
+    private val SPRING_LOCALE_MESSAGE_PATTERN =
+        Regex("^messages[_-][a-zA-Z]{2}(?:[_-][a-zA-Z]{2})?\\.properties$", RegexOption.IGNORE_CASE)
 
     fun scanForTranslationFiles(project: Project): List<VirtualFile> {
         val baseDir = project.guessProjectDir() ?: return emptyList()
@@ -25,7 +27,7 @@ object I18nDirectoryScanner {
             collectTranslationFiles(dir, translationFiles)
         }
 
-        // Also scan for Spring message properties in src/main/resources directories
+        // Also scan for Spring locale message properties in src/main/resources directories
         findSpringMessageFiles(baseDir, translationFiles)
 
         return translationFiles
@@ -64,11 +66,11 @@ object I18nDirectoryScanner {
     }
 
     /**
-     * Find Spring message bundle files (messages*.properties) in src/main/resources directories.
+     * Find Spring locale message bundle files (messages_<locale>.properties) in src/main/resources.
      */
     private fun findSpringMessageFiles(root: VirtualFile, result: MutableList<VirtualFile>) {
         VfsUtil.iterateChildrenRecursively(root, ::shouldTraverse) { file ->
-            if (!file.isDirectory && isSpringMessageFile(file)) {
+            if (!file.isDirectory && isSpringLocaleMessageFile(file)) {
                 // Check that it's under a "resources" directory (typically src/main/resources)
                 if (isUnderResourcesDir(file)) {
                     if (!result.contains(file)) {
@@ -80,12 +82,7 @@ object I18nDirectoryScanner {
         }
     }
 
-    /**
-     * Check if a file matches the Spring message bundle naming pattern.
-     */
-    fun isSpringMessageFile(file: VirtualFile): Boolean {
-        return SPRING_MESSAGE_PATTERN.matches(file.name)
-    }
+    fun isSpringLocaleMessageFile(file: VirtualFile): Boolean = SPRING_LOCALE_MESSAGE_PATTERN.matches(file.name)
 
     /**
      * Check if a file is under a "resources" directory.
@@ -101,7 +98,7 @@ object I18nDirectoryScanner {
 
     fun isTranslationFile(file: VirtualFile): Boolean {
         // Check for Spring message files
-        if (isSpringMessageFile(file) && isUnderResourcesDir(file)) return true
+        if (isSpringLocaleMessageFile(file) && isUnderResourcesDir(file)) return true
 
         val ext = file.extension?.lowercase() ?: return false
         if (!TranslationFileType.allExtensions().contains(ext)) return false

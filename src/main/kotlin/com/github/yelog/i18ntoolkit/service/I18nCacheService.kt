@@ -76,11 +76,26 @@ class I18nCacheService(private val project: Project) : Disposable {
         translationFiles.forEach { file ->
             ProgressManager.checkCanceled()
             try {
-                val isSpringMessage = I18nDirectoryScanner.isSpringMessageFile(file)
-                val pathInfo = if (isSpringMessage) {
-                    // For Spring message files, extract locale from filename suffix
-                    val locale = I18nLocaleUtils.extractLocaleFromSpringFilename(file.nameWithoutExtension)
-                    I18nKeyGenerator.PathInfo(locale = locale, module = null, businessUnit = null, keyPrefix = "")
+                val springLocale = I18nLocaleUtils.extractLocaleFromSpringFilename(file.nameWithoutExtension)
+                val isSpringMessageLikeProperties = file.extension.equals("properties", ignoreCase = true) &&
+                        file.nameWithoutExtension.startsWith("messages", ignoreCase = true)
+
+                // In Spring projects, parse only locale-suffixed message bundles.
+                if (framework == I18nFramework.SPRING_MESSAGE &&
+                    isSpringMessageLikeProperties &&
+                    springLocale == null
+                ) {
+                    return@forEach
+                }
+
+                val pathInfo = if (springLocale != null) {
+                    // For Spring locale message files, locale comes from filename suffix.
+                    I18nKeyGenerator.PathInfo(
+                        locale = springLocale,
+                        module = null,
+                        businessUnit = null,
+                        keyPrefix = ""
+                    )
                 } else {
                     I18nKeyGenerator.parseFilePath(file, basePath)
                 }

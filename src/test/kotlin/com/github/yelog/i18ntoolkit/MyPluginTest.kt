@@ -1,10 +1,12 @@
 package com.github.yelog.i18ntoolkit
 
 import com.intellij.ide.highlighter.XmlFileType
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.psi.xml.XmlFile
 import com.intellij.testFramework.TestDataPath
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.PsiErrorElementUtil
+import com.github.yelog.i18ntoolkit.service.I18nCacheService
 
 @TestDataPath("\$CONTENT_ROOT/src/test/testData")
 class MyPluginTest : BasePlatformTestCase() {
@@ -21,6 +23,80 @@ class MyPluginTest : BasePlatformTestCase() {
             assertEquals("foo", it.name)
             assertEquals("bar", it.value.text)
         }
+    }
+
+    fun testSpringLocaleMessageKeysDoNotIncludeFilenamePrefix() {
+        myFixture.tempDirFixture.createFile(
+            "build.gradle.kts",
+            """
+            plugins {
+                java
+            }
+            dependencies {
+                implementation("org.springframework.boot:spring-boot-starter")
+            }
+            """.trimIndent()
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/main/resources/i18n/messages.properties",
+            "tray.uwipBarcode.required=Base Required"
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/main/resources/i18n/messages_en_US.properties",
+            "tray.uwipBarcode.required=UwipBarcode Required"
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/main/resources/i18n/messages_zh_CN.properties",
+            "tray.uwipBarcode.required=条码为必填项"
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        val keys = cacheService.getAllKeys()
+        assertContainsElements(keys, "tray.uwipBarcode.required")
+        assertFalse(keys.any { it.startsWith("messages_en_US.") || it.startsWith("messages_zh_CN.") })
+
+        val translations = cacheService.getAllTranslations("tray.uwipBarcode.required")
+        assertContainsElements(translations.keys, "en_US", "zh_CN")
+        assertFalse(translations.containsKey("default"))
+
+        val locales = cacheService.getAvailableLocales()
+        assertContainsElements(locales, "en_US", "zh_CN")
+    }
+
+    fun testTargetDirectoryIsIgnoredAndUnicodeEscapesAreDecoded() {
+        myFixture.tempDirFixture.createFile(
+            "build.gradle.kts",
+            """
+            plugins {
+                java
+            }
+            dependencies {
+                implementation("org.springframework.boot:spring-boot-starter")
+            }
+            """.trimIndent()
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/main/resources/i18n/messages_zh_CN.properties",
+            "tray.uwipBarcode.required=\\u4E2D\\u6587"
+        )
+        myFixture.tempDirFixture.createFile(
+            "target/classes/static/i18n/messages_zh_CN.properties",
+            "messages_zh_CN.tray.uwipBarcode.required=SHOULD_NOT_BE_INDEXED"
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        val keys = cacheService.getAllKeys()
+        assertContainsElements(keys, "tray.uwipBarcode.required")
+        assertFalse(keys.any { it.startsWith("messages_zh_CN.") })
+
+        val zhEntry = cacheService.getTranslationStrict("tray.uwipBarcode.required", "zh_CN")
+        assertNotNull(zhEntry)
+        assertEquals("中文", zhEntry!!.value)
+        assertFalse(zhEntry.file.path.contains("/target/"))
     }
 
     override fun getTestDataPath() = "src/test/testData"

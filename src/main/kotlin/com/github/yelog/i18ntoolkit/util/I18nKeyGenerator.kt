@@ -87,6 +87,10 @@ object I18nKeyGenerator {
     private data class LocaleModuleInfo(val locale: String, val module: String?)
 
     private fun extractLocaleAndModule(parts: List<String>, fileName: String): LocaleModuleInfo {
+        I18nLocaleUtils.extractLocaleFromSpringFilename(fileName)?.let { springLocale ->
+            return LocaleModuleInfo(locale = springLocale, module = null)
+        }
+
         val localeDirectoryNames = listOf("locales", "locale", "i18n", "lang", "langs", "messages", "translations")
         val localeIndex = parts.indexOfLast { localeDirectoryNames.contains(it.lowercase()) }
 
@@ -123,6 +127,8 @@ object I18nKeyGenerator {
     }
 
     private fun extractLocale(parts: List<String>, fileName: String): String {
+        I18nLocaleUtils.extractLocaleFromSpringFilename(fileName)?.let { return it }
+
         for (part in parts.reversed()) {
             if (isLocale(part)) return part
         }
