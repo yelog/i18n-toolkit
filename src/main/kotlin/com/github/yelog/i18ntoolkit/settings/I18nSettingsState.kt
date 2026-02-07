@@ -55,7 +55,7 @@ class I18nSettingsState(private val project: Project) : PersistentStateComponent
     }
 
     private fun parseI18nFunctions(input: String): Set<String> {
-        return input.split(",")
+        return input.split(Regex("[,，;；\\n]+"))
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .toSet()

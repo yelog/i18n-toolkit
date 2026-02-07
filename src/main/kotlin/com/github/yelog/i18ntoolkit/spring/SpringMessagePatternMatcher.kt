@@ -202,12 +202,20 @@ object SpringMessagePatternMatcher {
         qualifierText: String?,
         configured: ConfiguredMethodMatchers
     ): Boolean {
-        if (configured.simpleMethods.contains(methodName)) return true
+        if (configured.simpleMethods.any { it.equals(methodName, ignoreCase = true) }) return true
+        if (configured.qualifiedMethods.isEmpty()) return false
 
-        if (qualifierText.isNullOrBlank() || configured.qualifiedMethods.isEmpty()) return false
-        val fullCall = "$qualifierText.$methodName"
+        val normalizedMethod = methodName.lowercase()
+        if (qualifierText.isNullOrBlank()) {
+            return configured.qualifiedMethods.any { it.substringAfterLast('.').equals(methodName, ignoreCase = true) }
+        }
+
+        val fullCall = "$qualifierText.$methodName".lowercase()
         return configured.qualifiedMethods.any { configuredCall ->
-            fullCall == configuredCall || fullCall.endsWith(".$configuredCall")
+            val normalizedConfigured = configuredCall.lowercase()
+            fullCall == normalizedConfigured ||
+                fullCall.endsWith(".$normalizedConfigured") ||
+                normalizedConfigured.substringAfterLast('.') == normalizedMethod
         }
     }
 }

@@ -14,6 +14,7 @@ import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
 import com.github.yelog.i18ntoolkit.spring.JavaI18nKeyCompletionContributor
 import com.github.yelog.i18ntoolkit.spring.SpringMessagePatternMatcher
+import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
 import com.github.yelog.i18ntoolkit.util.I18nKeyExtractor
 
 @TestDataPath("\$CONTENT_ROOT/src/test/testData")
@@ -306,6 +307,37 @@ class MyPluginTest : BasePlatformTestCase() {
         val references = ReferencesSearch.search(keyLeaf!!).findAll()
         assertTrue(references.isNotEmpty())
         assertTrue(references.any { it.element.containingFile.name == "Demo5.java" })
+    }
+
+    fun testCustomFunctionSeparatorsSupportChinesePunctuation() {
+        val settings = I18nSettingsState.getInstance(project)
+        settings.state.customI18nFunctions = "t，\$t；LangUtil.get"
+
+        val functions = I18nFunctionResolver.getFunctions(project)
+        assertContainsElements(functions, "t", "\$t", "LangUtil.get")
+    }
+
+    fun testSpringMatcherSupportsCaseInsensitiveQualifiedFunction() {
+        val settings = I18nSettingsState.getInstance(project)
+        settings.state.customI18nFunctions = "LangUtil.get"
+
+        val psiFile = myFixture.configureByText(
+            "DemoCase.java",
+            """
+            class DemoCase {
+                String value() {
+                    return langUtil.get("tray.uwipBarcode.required");
+                }
+            }
+            """.trimIndent()
+        )
+
+        val literal = PsiTreeUtil.findChildOfType(psiFile, PsiLiteralExpression::class.java)
+        assertNotNull(literal)
+
+        val match = SpringMessagePatternMatcher.extractKey(literal!!)
+        assertNotNull(match)
+        assertEquals("tray.uwipBarcode.required", match!!.key)
     }
 
     override fun getTestDataPath() = "src/test/testData"

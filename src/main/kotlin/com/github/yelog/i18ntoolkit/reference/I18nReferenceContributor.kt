@@ -143,6 +143,10 @@ class I18nNavigationElement(
 
     override fun getNavigationElement(): PsiElement = delegate
 
+    override fun getContainingFile() = delegate.containingFile
+
+    override fun getTextOffset(): Int = delegate.textOffset
+
     override fun navigate(requestFocus: Boolean) {
         // Use OpenFileDescriptor for reliable navigation
         val descriptor = OpenFileDescriptor(delegate.project, entry.file, entry.offset)
@@ -152,6 +156,11 @@ class I18nNavigationElement(
     override fun canNavigate(): Boolean = true
 
     override fun canNavigateToSource(): Boolean = true
+
+    override fun isEquivalentTo(another: PsiElement?): Boolean {
+        val other = if (another is I18nNavigationElement) another.delegate else another
+        return delegate.isEquivalentTo(other)
+    }
 
     override fun getPresentation(): ItemPresentation {
         return object : ItemPresentation {
