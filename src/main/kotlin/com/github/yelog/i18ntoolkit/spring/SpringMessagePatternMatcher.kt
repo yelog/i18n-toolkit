@@ -1,11 +1,13 @@
 package com.github.yelog.i18ntoolkit.spring
 
+import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiLiteralExpression
-import com.intellij.psi.PsiMethodCallExpression
 import com.intellij.psi.PsiAnnotation
 import com.intellij.psi.PsiNameValuePair
+import com.intellij.psi.PsiLiteralExpression
+import com.intellij.psi.PsiMethodCallExpression
 import com.intellij.psi.util.PsiTreeUtil
+import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
 
 /**
  * Identifies Spring i18n patterns in Java code and extracts translation keys.
@@ -45,6 +47,11 @@ object SpringMessagePatternMatcher {
         val key: String,
         val keyElement: PsiLiteralExpression,
         val matchType: MatchType
+    )
+
+    private data class ConfiguredMethodMatchers(
+        val simpleMethods: Set<String>,
+        val qualifiedMethods: Set<String>
     )
 
     enum class MatchType {
@@ -90,6 +97,7 @@ object SpringMessagePatternMatcher {
     ): I18nKeyMatch? {
         val methodExpr = methodCall.methodExpression
         val methodName = methodExpr.referenceName ?: return null
+        val qualifierText = methodExpr.qualifierExpression?.text
 
         // Check: is this literal the first argument?
         val args = methodCall.argumentList.expressions
@@ -100,10 +108,13 @@ object SpringMessagePatternMatcher {
             return I18nKeyMatch(value, literal, MatchType.MESSAGE_SOURCE)
         }
 
+        val customMatchers = getConfiguredMethodMatchers(literal.project)
+        if (matchesConfiguredMethod(methodName, qualifierText, customMatchers)) {
+            return I18nKeyMatch(value, literal, MatchType.CUSTOM_UTILITY)
+        }
+
         // Pattern 2: MessageUtils.get("key") or similar utility calls
         if (CUSTOM_I18N_METHODS.contains(methodName)) {
-            val qualifier = methodExpr.qualifierExpression
-            val qualifierText = qualifier?.text
             if (qualifierText != null && I18N_UTILITY_CLASSES.any { qualifierText.contains(it) }) {
                 return I18nKeyMatch(value, literal, MatchType.CUSTOM_UTILITY)
             }
@@ -147,11 +158,14 @@ object SpringMessagePatternMatcher {
      */
     fun isSpringI18nCall(methodCall: PsiMethodCallExpression): Boolean {
         val methodName = methodCall.methodExpression.referenceName ?: return false
+        val qualifier = methodCall.methodExpression.qualifierExpression?.text
 
         if (MESSAGE_SOURCE_METHODS.contains(methodName)) return true
 
+        val customMatchers = getConfiguredMethodMatchers(methodCall.project)
+        if (matchesConfiguredMethod(methodName, qualifier, customMatchers)) return true
+
         if (CUSTOM_I18N_METHODS.contains(methodName)) {
-            val qualifier = methodCall.methodExpression.qualifierExpression?.text
             if (qualifier != null) {
                 return I18N_UTILITY_CLASSES.any { qualifier.contains(it) }
                         || qualifier.lowercase().contains("message")
@@ -159,5 +173,41 @@ object SpringMessagePatternMatcher {
         }
 
         return false
+    }
+
+    private fun getConfiguredMethodMatchers(project: Project): ConfiguredMethodMatchers {
+        val simpleMethods = mutableSetOf<String>()
+        val qualifiedMethods = mutableSetOf<String>()
+
+        I18nFunctionResolver.getFunctions(project)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .map { it.removeSuffix("()") }
+            .forEach { token ->
+                if (token.contains('.')) {
+                    qualifiedMethods.add(token)
+                } else {
+                    simpleMethods.add(token)
+                }
+            }
+
+        return ConfiguredMethodMatchers(
+            simpleMethods = simpleMethods,
+            qualifiedMethods = qualifiedMethods
+        )
+    }
+
+    private fun matchesConfiguredMethod(
+        methodName: String,
+        qualifierText: String?,
+        configured: ConfiguredMethodMatchers
+    ): Boolean {
+        if (configured.simpleMethods.contains(methodName)) return true
+
+        if (qualifierText.isNullOrBlank() || configured.qualifiedMethods.isEmpty()) return false
+        val fullCall = "$qualifierText.$methodName"
+        return configured.qualifiedMethods.any { configuredCall ->
+            fullCall == configuredCall || fullCall.endsWith(".$configuredCall")
+        }
     }
 }

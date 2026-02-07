@@ -71,7 +71,7 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
 
     private fun getCurrentDisplayText(): String {
         val settings = I18nSettingsState.getInstance(project)
-        val displayLocale = settings.getDisplayLocaleOrNull()
+        val displayLocale = resolveCurrentLocale(settings, null)
         return displayLocale?.let { I18nLocaleUtils.formatLocaleForDisplay(it) } ?: EMPTY_LOCALE_TEXT
     }
 
@@ -100,7 +100,7 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
 
         thisLogger().info("Creating popup with ${locales.size} locales: $locales")
 
-        val currentLocale = settings.getDisplayLocaleOrNull()
+        val currentLocale = resolveCurrentLocale(settings, locales)
 
         // Create items list: Settings option + locales
         val settingsItem = PopupItem.SettingsItem
@@ -175,6 +175,30 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
         }
 
         return JBPopupFactory.getInstance().createListPopup(step)
+    }
+
+    private fun resolveCurrentLocale(
+        settings: I18nSettingsState,
+        availableLocales: List<String>?
+    ): String? {
+        val locales = availableLocales ?: I18nCacheService.getInstance(project).getAvailableLocales().sorted()
+        if (locales.isEmpty()) return null
+
+        val currentLocale = settings.getDisplayLocaleOrNull()
+        if (currentLocale != null) {
+            val normalizedCurrent = I18nLocaleUtils.normalizeLocale(currentLocale)
+            val matched = locales.firstOrNull { I18nLocaleUtils.normalizeLocale(it) == normalizedCurrent }
+            if (matched != null) {
+                if (matched != currentLocale) {
+                    settings.state.displayLocale = matched
+                }
+                return matched
+            }
+        }
+
+        val fallback = locales.first()
+        settings.state.displayLocale = fallback
+        return fallback
     }
 
     /**
