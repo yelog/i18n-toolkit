@@ -3,8 +3,8 @@ package com.github.yelog.i18ntoolkit.usages
 import com.github.yelog.i18ntoolkit.reference.I18nKeyReference
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
-import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
+import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.intellij.find.findUsages.FindUsagesHandler
 import com.intellij.find.findUsages.FindUsagesHandlerFactory
 import com.intellij.json.psi.JsonProperty
@@ -15,13 +15,19 @@ import com.intellij.lang.javascript.psi.JSProperty
 import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.diagnostic.thisLogger
-import com.intellij.openapi.project.guessProjectDir
-import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
+import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiRecursiveElementVisitor
 import com.intellij.psi.PsiReference
+import com.intellij.psi.search.FilenameIndex
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.search.SearchScope
 import com.intellij.usageView.UsageInfo
 import com.intellij.util.Processor
 
@@ -193,62 +199,39 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             return true
         }
 
-        private fun findUsagesInScope(searchScope: com.intellij.psi.search.SearchScope): List<UsageInfo> {
+        private fun findUsagesInScope(searchScope: SearchScope): List<UsageInfo> {
             val usages = mutableListOf<UsageInfo>()
             val project = psiElement.project
-            val baseDir = project.guessProjectDir() ?: return usages
-            val sourceExtensions = listOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs")
+            val candidateFiles = collectCandidateFiles(project, searchScope)
 
             thisLogger().info("I18n Toolkit: Searching for key '$fullKey' in scope: $searchScope")
 
-            // First, collect all candidate files (without scope check which needs ReadAction)
-            val candidateFiles = mutableListOf<com.intellij.openapi.vfs.VirtualFile>()
-            VfsUtil.iterateChildrenRecursively(baseDir, { file ->
-                !file.name.startsWith(".") &&
-                file.name != "node_modules" &&
-                file.name != "dist" &&
-                file.name != "build" &&
-                !file.path.contains("/node_modules/")
-            }) { file ->
-                if (!file.isDirectory && sourceExtensions.contains(file.extension?.lowercase())) {
-                    candidateFiles.add(file)
-                }
-                true
-            }
-
             thisLogger().info("I18n Toolkit: Found ${candidateFiles.size} candidate files")
 
-            // Then, filter by scope and process all files in ReadAction
-            ReadAction.run<RuntimeException> {
-                val psiManager = PsiManager.getInstance(project)
-                var processedCount = 0
+            val psiManager = PsiManager.getInstance(project)
+            var processedCount = 0
 
-                for (file in candidateFiles) {
-                    // Check scope inside ReadAction
-                    if (searchScope is GlobalSearchScope && !searchScope.contains(file)) {
-                        continue
-                    }
-
+            for (file in candidateFiles) {
+                ProgressManager.checkCanceled()
+                ReadAction.run<RuntimeException> {
+                    val psiFile = psiManager.findFile(file) ?: return@run
                     processedCount++
-                    val psiFile = psiManager.findFile(file)
-                    if (psiFile != null) {
-                        findKeyUsagesInFile(psiFile, usages)
-                    }
+                    findKeyUsagesInFile(psiFile, usages)
                 }
-
-                thisLogger().info("I18n Toolkit: Processed $processedCount files in scope")
             }
 
+            thisLogger().info("I18n Toolkit: Processed $processedCount files in scope")
             thisLogger().info("I18n Toolkit: Total usages found: ${usages.size}")
             return usages
         }
 
         private fun findKeyUsagesInFile(
-            psiFile: com.intellij.psi.PsiFile,
+            psiFile: PsiFile,
             usages: MutableList<UsageInfo>
         ) {
             psiFile.accept(object : PsiRecursiveElementVisitor() {
                 override fun visitElement(element: PsiElement) {
+                    ProgressManager.checkCanceled()
                     if (element is JSCallExpression) {
                         checkCallExpression(element, usages)
                     }
@@ -284,10 +267,39 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             if (isMatch) {
                 thisLogger().info("I18n Toolkit: Match found - partial: $partialKey, resolved: $resolvedFullKey, searching: $fullKey")
                 // Create a custom reference for this usage
-                val relativeRange = com.intellij.openapi.util.TextRange(1, partialKey.length + 1)
+                val relativeRange = TextRange(1, partialKey.length + 1)
                 val reference = I18nKeyReference(firstArg, relativeRange, resolvedFullKey, partialKey)
                 usages.add(UsageInfo(reference))
             }
         }
+    }
+
+    private fun collectCandidateFiles(project: Project, searchScope: SearchScope): List<VirtualFile> {
+        val indexScope = (searchScope as? GlobalSearchScope) ?: GlobalSearchScope.projectScope(project)
+        val projectFileIndex = ProjectFileIndex.getInstance(project)
+        val files = linkedSetOf<VirtualFile>()
+
+        SOURCE_EXTENSIONS.forEach { extension ->
+            val indexedFiles = FilenameIndex.getAllFilesByExt(project, extension, indexScope)
+            indexedFiles.forEach { file ->
+                ProgressManager.checkCanceled()
+                if (!searchScope.contains(file)) return@forEach
+                if (!projectFileIndex.isInContent(file)) return@forEach
+                if (isExcludedPath(file)) return@forEach
+                files.add(file)
+            }
+        }
+
+        return files.toList()
+    }
+
+    private fun isExcludedPath(file: VirtualFile): Boolean {
+        val normalizedPath = file.path.replace('\\', '/')
+        return EXCLUDED_PATH_SEGMENTS.any { segment -> normalizedPath.contains(segment) }
+    }
+
+    companion object {
+        private val SOURCE_EXTENSIONS = listOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs")
+        private val EXCLUDED_PATH_SEGMENTS = listOf("/node_modules/", "/dist/", "/build/")
     }
 }
