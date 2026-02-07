@@ -18,6 +18,18 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.0.4</h3>
+    <h4>Fixed</h4>
+    <ul>
+        <li>In <code>Translation Only</code> display mode, translated folds are now re-collapsed immediately when the caret leaves the i18n key during Replace operations</li>
+    </ul>
+    <h4>Changed</h4>
+    <ul>
+        <li>Refactored translation cache refresh to use non-blocking read actions with refresh coalescing to reduce UI-thread work</li>
+        <li>Improved Find Usages and reference search performance by scanning indexed source files instead of recursively traversing project directories</li>
+        <li>Added cancellation checkpoints in cache build and usage scanning flows to keep the IDE responsive on large projects</li>
+    </ul>
+
     <h3>0.0.3</h3>
     <h4>Fixed</h4>
     <ul>

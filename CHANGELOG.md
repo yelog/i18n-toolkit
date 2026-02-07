@@ -2,6 +2,17 @@
 
 # i18n-toolkit Changelog
 
+## [Unreleased]
+
+## 0.0.4
+### Fixed
+- In `Translation Only` display mode, translated folds are now re-collapsed immediately when the caret leaves the i18n key during Replace operations
+
+### Changed
+- Refactored translation cache refresh to use non-blocking read actions with refresh coalescing to reduce UI-thread work
+- Improved Find Usages and reference search performance by scanning indexed source files instead of recursively traversing project directories
+- Added cancellation checkpoints in cache build and usage scanning flows to keep the IDE responsive on large projects
+
 ## 0.0.3
 ### Fixed
 - Inline translation hints not displaying when files are reopened after being closed
@@ -25,7 +36,3 @@
 - Smart key completion with display-language translation matching
 - Inline translation preview, Quick Documentation, and translation search popup
 - Go to Declaration/Implementation, cross-locale navigation, and Find Usages
-
-## [Unreleased]
-### Added
-- Initial scaffold created from [IntelliJ Platform Plugin Template](https://github.com/JetBrains/intellij-platform-plugin-template)
