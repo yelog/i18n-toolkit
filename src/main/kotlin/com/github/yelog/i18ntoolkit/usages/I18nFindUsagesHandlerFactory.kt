@@ -3,6 +3,7 @@ package com.github.yelog.i18ntoolkit.usages
 import com.github.yelog.i18ntoolkit.reference.I18nKeyReference
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.spring.SpringMessagePatternMatcher
 import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
 import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.intellij.find.findUsages.FindUsagesHandler
@@ -22,6 +23,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiRecursiveElementVisitor
 import com.intellij.psi.PsiReference
@@ -86,18 +88,23 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
      * Handles cases where the cursor is on a string literal (the property name).
      */
     private fun getPropertyElement(element: PsiElement): PsiElement? {
-        return when (element) {
-            is JsonProperty -> element
-            is JSProperty -> element
-            is JsonStringLiteral -> {
-                // If cursor is on the property name string, get the parent property
-                element.parent as? JsonProperty
+        var current: PsiElement? = element
+        while (current != null) {
+            when (current) {
+                is JsonProperty -> return current
+                is JSProperty -> return current
+                is JsonStringLiteral -> {
+                    (current.parent as? JsonProperty)?.let { return it }
+                }
             }
-            else -> {
-                // Try to find a parent that is a property
-                element.parent?.let { getPropertyElement(it) }
+
+            if (extractPropertiesKey(current) != null) {
+                return current
             }
+
+            current = current.parent
         }
+        return null
     }
 
     private fun isInTranslationFile(element: PsiElement): Boolean {
@@ -126,8 +133,15 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             is JsonProperty -> buildFullKey(element, translationFile.keyPrefix)
             is JSProperty -> buildFullKey(element, translationFile.keyPrefix)
             else -> {
-                thisLogger().warn("I18n Toolkit: Unexpected element type: ${element.javaClass.simpleName}")
-                null
+                val rawKey = extractPropertiesKey(element)
+                if (rawKey.isNullOrBlank()) {
+                    thisLogger().warn("I18n Toolkit: Unexpected element type: ${element.javaClass.simpleName}")
+                    null
+                } else if (translationFile.keyPrefix.isEmpty()) {
+                    rawKey
+                } else {
+                    "${translationFile.keyPrefix}$rawKey"
+                }
             }
         }
 
@@ -136,6 +150,116 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
         }
 
         return fullKey
+    }
+
+    private fun extractPropertiesKey(element: PsiElement): String? {
+        val file = element.containingFile?.virtualFile ?: return null
+        if (!file.extension.equals("properties", ignoreCase = true)) return null
+        if (!I18nDirectoryScanner.isTranslationFile(file)) return null
+
+        var current: PsiElement? = element
+        while (current != null) {
+            invokeStringGetter(current, "getUnescapedKey")?.let { return it }
+            invokeStringGetter(current, "getKey")?.let { return it }
+            current = current.parent
+        }
+        return extractPropertiesKeyFromLine(element)
+    }
+
+    private fun invokeStringGetter(target: Any, methodName: String): String? {
+        return try {
+            val method = target.javaClass.methods.firstOrNull {
+                it.name == methodName && it.parameterCount == 0
+            } ?: return null
+            method.invoke(target) as? String
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun extractPropertiesKeyFromLine(element: PsiElement): String? {
+        val fileText = element.containingFile?.text ?: return null
+        if (fileText.isEmpty()) return null
+
+        val safeOffset = element.textOffset.coerceIn(0, fileText.length - 1)
+        val lineStart = fileText.lastIndexOf('\n', safeOffset).let { if (it < 0) 0 else it + 1 }
+        val lineEnd = fileText.indexOf('\n', safeOffset).let { if (it < 0) fileText.length else it }
+        val line = fileText.substring(lineStart, lineEnd)
+        return parsePropertiesKey(line)
+    }
+
+    private fun parsePropertiesKey(line: String): String? {
+        val trimmed = line.trimStart()
+        if (trimmed.isBlank() || trimmed.startsWith("#") || trimmed.startsWith("!")) return null
+
+        var escaped = false
+        for (index in trimmed.indices) {
+            val c = trimmed[index]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (c == '\\') {
+                escaped = true
+                continue
+            }
+            if (c == '=' || c == ':' || c.isWhitespace()) {
+                val rawKey = trimmed.substring(0, index).trimEnd()
+                return unescapePropertiesText(rawKey)
+            }
+        }
+
+        return unescapePropertiesText(trimmed)
+    }
+
+    private fun unescapePropertiesText(text: String): String {
+        val sb = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '\\' && i + 1 < text.length) {
+                val next = text[i + 1]
+                when (next) {
+                    't' -> {
+                        sb.append('\t')
+                        i += 2
+                        continue
+                    }
+                    'r' -> {
+                        sb.append('\r')
+                        i += 2
+                        continue
+                    }
+                    'n' -> {
+                        sb.append('\n')
+                        i += 2
+                        continue
+                    }
+                    'f' -> {
+                        sb.append('\u000c')
+                        i += 2
+                        continue
+                    }
+                    'u', 'U' -> {
+                        if (i + 5 < text.length) {
+                            val hex = text.substring(i + 2, i + 6)
+                            val code = hex.toIntOrNull(16)
+                            if (code != null) {
+                                sb.append(code.toChar())
+                                i += 6
+                                continue
+                            }
+                        }
+                    }
+                }
+                sb.append(next)
+                i += 2
+                continue
+            }
+            sb.append(c)
+            i++
+        }
+        return sb.toString()
     }
 
     private fun buildFullKey(property: PsiElement, prefix: String): String {
@@ -235,6 +359,9 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
                     if (element is JSCallExpression) {
                         checkCallExpression(element, usages)
                     }
+                    if (element is PsiLiteralExpression) {
+                        checkJavaLiteralExpression(element, usages)
+                    }
                     super.visitElement(element)
                 }
             })
@@ -272,6 +399,34 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
                 usages.add(UsageInfo(reference))
             }
         }
+
+        private fun checkJavaLiteralExpression(
+            literal: PsiLiteralExpression,
+            usages: MutableList<UsageInfo>
+        ) {
+            val stringValue = literal.value as? String ?: return
+            if (stringValue.isBlank()) return
+
+            val match = SpringMessagePatternMatcher.extractKey(literal) ?: return
+            val partialKey = match.key
+            val resolvedFullKey = partialKey
+
+            val isMatch = resolvedFullKey == fullKey || partialKey == fullKey ||
+                    (fullKey.contains('.') && fullKey.endsWith(".$partialKey"))
+            if (!isMatch) return
+
+            thisLogger().info(
+                "I18n Toolkit: Java match found - partial: $partialKey, resolved: $resolvedFullKey, searching: $fullKey"
+            )
+
+            val relativeRange = if (match.matchType == SpringMessagePatternMatcher.MatchType.VALIDATION_ANNOTATION) {
+                TextRange(2, 2 + partialKey.length)
+            } else {
+                TextRange(1, partialKey.length + 1)
+            }
+            val reference = I18nKeyReference(literal, relativeRange, resolvedFullKey, partialKey)
+            usages.add(UsageInfo(reference))
+        }
     }
 
     private fun collectCandidateFiles(project: Project, searchScope: SearchScope): List<VirtualFile> {
@@ -299,7 +454,7 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
     }
 
     companion object {
-        private val SOURCE_EXTENSIONS = listOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs")
+        private val SOURCE_EXTENSIONS = listOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs", "java")
         private val EXCLUDED_PATH_SEGMENTS = listOf("/node_modules/", "/dist/", "/build/")
     }
 }

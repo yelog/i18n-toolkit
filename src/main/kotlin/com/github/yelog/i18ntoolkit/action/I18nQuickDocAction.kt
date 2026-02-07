@@ -4,6 +4,7 @@ import com.github.yelog.i18ntoolkit.popup.I18nTranslationEditPopup
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
+import com.github.yelog.i18ntoolkit.spring.SpringMessagePatternMatcher
 import com.github.yelog.i18ntoolkit.util.I18nKeyExtractor
 import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.intellij.lang.injection.InjectedLanguageManager
@@ -14,6 +15,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.application.ReadAction
+import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.PsiFile
 import com.intellij.psi.util.PsiTreeUtil
 
@@ -47,6 +49,19 @@ class I18nQuickDocAction(val originalAction: AnAction) : AnAction() {
 
                 // Check in host file first
                 val elementAtCaret = psiFile.findElementAt(offset)
+
+                // Java: caret inside string literal used by configured i18n methods
+                val javaLiteral = PsiTreeUtil.getParentOfType(elementAtCaret, PsiLiteralExpression::class.java, false)
+                if (javaLiteral != null &&
+                    javaLiteral.value is String &&
+                    javaLiteral.textRange.containsOffset(offset)
+                ) {
+                    val javaKey = SpringMessagePatternMatcher.extractKey(javaLiteral)?.key
+                    if (!javaKey.isNullOrBlank()) {
+                        return@compute com.github.yelog.i18ntoolkit.util.I18nKeyCandidate(javaKey, javaKey)
+                    }
+                }
+
                 val literal = PsiTreeUtil.getParentOfType(elementAtCaret, JSLiteralExpression::class.java, false)
                 if (literal != null && literal.isStringLiteral && literal.textRange.containsOffset(offset)) {
                     return@compute extractKeyFromLiteral(literal)

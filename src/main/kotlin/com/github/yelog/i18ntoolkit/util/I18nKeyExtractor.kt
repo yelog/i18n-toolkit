@@ -7,9 +7,11 @@ import com.intellij.lang.javascript.psi.JSProperty
 import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.util.PsiTreeUtil
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.spring.SpringMessagePatternMatcher
 
 private val I18N_FUNCTIONS = setOf("t", "\$t", "i18n", "i18next", "translate", "formatMessage")
 
@@ -91,6 +93,12 @@ object I18nKeyExtractor {
                 val call = PsiTreeUtil.getParentOfType(element, JSCallExpression::class.java)
                 if (call != null) {
                     return extractI18nKeys(call)
+                }
+            }
+            if (element is PsiLiteralExpression && element.value is String) {
+                val javaKey = SpringMessagePatternMatcher.extractKey(element)?.key
+                if (!javaKey.isNullOrBlank()) {
+                    return I18nKeyCandidate(javaKey, javaKey)
                 }
             }
             element = element.parent

@@ -2,6 +2,7 @@ package com.github.yelog.i18ntoolkit.reference
 
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.spring.SpringMessagePatternMatcher
 import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
 import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
 import com.intellij.json.psi.JsonProperty
@@ -18,6 +19,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiRecursiveElementVisitor
 import com.intellij.psi.PsiReference
@@ -46,8 +48,128 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
         return when (element) {
             is JsonProperty -> extractKeyFromJsonProperty(element, project)
             is JSProperty -> extractKeyFromJsProperty(element, project)
-            else -> null
+            else -> extractKeyFromPropertiesElement(element, project)
         }
+    }
+
+    private fun extractKeyFromPropertiesElement(element: PsiElement, project: Project): String? {
+        val file = element.containingFile?.virtualFile ?: return null
+        if (!file.extension.equals("properties", ignoreCase = true)) return null
+        if (!I18nDirectoryScanner.isTranslationFile(file)) return null
+
+        val rawKey = extractPropertiesKey(element) ?: return null
+        if (rawKey.isBlank()) return null
+
+        val cacheService = I18nCacheService.getInstance(project)
+        val translationFile = cacheService.getTranslationFile(file)
+        val prefix = translationFile?.keyPrefix.orEmpty()
+        return if (prefix.isEmpty()) rawKey else "$prefix$rawKey"
+    }
+
+    private fun extractPropertiesKey(element: PsiElement): String? {
+        var current: PsiElement? = element
+        while (current != null) {
+            invokeStringGetter(current, "getUnescapedKey")?.let { return it }
+            invokeStringGetter(current, "getKey")?.let { return it }
+            current = current.parent
+        }
+        return extractPropertiesKeyFromLine(element)
+    }
+
+    private fun invokeStringGetter(target: Any, methodName: String): String? {
+        return try {
+            val method = target.javaClass.methods.firstOrNull {
+                it.name == methodName && it.parameterCount == 0
+            } ?: return null
+            method.invoke(target) as? String
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun extractPropertiesKeyFromLine(element: PsiElement): String? {
+        val fileText = element.containingFile?.text ?: return null
+        if (fileText.isEmpty()) return null
+
+        val safeOffset = element.textOffset.coerceIn(0, fileText.length - 1)
+        val lineStart = fileText.lastIndexOf('\n', safeOffset).let { if (it < 0) 0 else it + 1 }
+        val lineEnd = fileText.indexOf('\n', safeOffset).let { if (it < 0) fileText.length else it }
+        val line = fileText.substring(lineStart, lineEnd)
+        return parsePropertiesKey(line)
+    }
+
+    private fun parsePropertiesKey(line: String): String? {
+        val trimmed = line.trimStart()
+        if (trimmed.isBlank() || trimmed.startsWith("#") || trimmed.startsWith("!")) return null
+
+        var escaped = false
+        for (index in trimmed.indices) {
+            val c = trimmed[index]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (c == '\\') {
+                escaped = true
+                continue
+            }
+            if (c == '=' || c == ':' || c.isWhitespace()) {
+                val rawKey = trimmed.substring(0, index).trimEnd()
+                return unescapePropertiesText(rawKey)
+            }
+        }
+
+        return unescapePropertiesText(trimmed)
+    }
+
+    private fun unescapePropertiesText(text: String): String {
+        val sb = StringBuilder(text.length)
+        var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (c == '\\' && i + 1 < text.length) {
+                val next = text[i + 1]
+                when (next) {
+                    't' -> {
+                        sb.append('\t')
+                        i += 2
+                        continue
+                    }
+                    'r' -> {
+                        sb.append('\r')
+                        i += 2
+                        continue
+                    }
+                    'n' -> {
+                        sb.append('\n')
+                        i += 2
+                        continue
+                    }
+                    'f' -> {
+                        sb.append('\u000c')
+                        i += 2
+                        continue
+                    }
+                    'u', 'U' -> {
+                        if (i + 5 < text.length) {
+                            val hex = text.substring(i + 2, i + 6)
+                            val code = hex.toIntOrNull(16)
+                            if (code != null) {
+                                sb.append(code.toChar())
+                                i += 6
+                                continue
+                            }
+                        }
+                    }
+                }
+                sb.append(next)
+                i += 2
+                continue
+            }
+            sb.append(c)
+            i++
+        }
+        return sb.toString()
     }
 
     private fun extractKeyFromJsonProperty(property: JsonProperty, project: Project): String? {
@@ -129,6 +251,10 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
                     shouldContinue = checkCallExpression(element, key, consumer)
                     if (!shouldContinue) return
                 }
+                if (element is PsiLiteralExpression) {
+                    shouldContinue = checkJavaLiteralExpression(element, key, consumer)
+                    if (!shouldContinue) return
+                }
                 super.visitElement(element)
             }
         })
@@ -178,6 +304,36 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
         return true
     }
 
+    private fun checkJavaLiteralExpression(
+        literal: PsiLiteralExpression,
+        key: String,
+        consumer: Processor<in PsiReference>
+    ): Boolean {
+        val stringValue = literal.value as? String ?: return true
+        if (stringValue.isBlank()) return true
+
+        val match = SpringMessagePatternMatcher.extractKey(literal) ?: return true
+        val partialKey = match.key
+        val fullKey = partialKey
+        val isMatch = fullKey == key || partialKey == key || (key.contains('.') && key.endsWith(".$partialKey"))
+        if (!isMatch) return true
+
+        val references = literal.references
+        if (references.isNotEmpty()) {
+            for (ref in references) {
+                if (!consumer.process(ref)) return false
+            }
+            return true
+        }
+
+        val relativeRange = if (match.matchType == SpringMessagePatternMatcher.MatchType.VALIDATION_ANNOTATION) {
+            TextRange(2, 2 + partialKey.length)
+        } else {
+            TextRange(1, partialKey.length + 1)
+        }
+        return consumer.process(I18nKeyReference(literal, relativeRange, fullKey, partialKey))
+    }
+
     private fun collectCandidateFiles(project: Project, scope: SearchScope): List<VirtualFile> {
         val indexScope = (scope as? GlobalSearchScope) ?: GlobalSearchScope.projectScope(project)
         val projectFileIndex = ProjectFileIndex.getInstance(project)
@@ -203,7 +359,7 @@ class I18nUsageSearcher : QueryExecutorBase<PsiReference, ReferencesSearch.Searc
     }
 
     companion object {
-        private val SOURCE_EXTENSIONS = listOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs")
+        private val SOURCE_EXTENSIONS = listOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs", "java")
         private val EXCLUDED_PATH_SEGMENTS = listOf("/node_modules/", "/dist/", "/build/")
     }
 }

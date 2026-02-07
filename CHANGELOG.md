@@ -8,6 +8,10 @@
 - Module-aware i18n lookup for multi-module projects, with dependency-module fallback when resolving keys
 - Detection of Spring message bundles in `src/main/resources` (e.g. `messages.properties`, `messages_zh_CN.properties`)
 
+### Fixed
+- Java `LangUtil.get(...)` i18n key completion now auto-popups reliably while typing and no longer loses candidates when completion runs on copied PSI files
+- Spring `.properties` translation keys now participate in plugin Find Usages / reference search for Java i18n calls, resolving false "unused key" gray states
+
 ### Changed
 - Extended cache snapshot/index structures with per-module translation data to support module-scoped key visibility and resolution
 - Added Spring filename locale extraction (`messages_xx[_YY]`) and integrated it into translation file path parsing

@@ -20,5 +20,8 @@
         <lang.documentationProvider language="JAVA"
                                     implementationClass="com.github.yelog.i18ntoolkit.spring.JavaI18nDocumentationProvider"
                                     order="first"/>
+
+        <!-- Auto-popup completion while typing i18n keys in Java string literals -->
+        <typedHandler implementation="com.github.yelog.i18ntoolkit.spring.JavaI18nTypedHandler"/>
     </extensions>
 </idea-plugin>
