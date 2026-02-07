@@ -3,11 +3,24 @@ package com.github.yelog.i18ntoolkit.listener
 import com.github.yelog.i18ntoolkit.hint.I18nInlayHintsProvider
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.settings.I18nDisplayMode
+import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
+import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
+import com.intellij.lang.javascript.psi.JSCallExpression
+import com.intellij.lang.javascript.psi.JSLiteralExpression
+import com.intellij.lang.javascript.psi.JSReferenceExpression
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.FoldRegion
+import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.editor.EditorFactory
@@ -51,6 +64,20 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
             }
         }
 
+        val caretListener = object : CaretListener {
+            override fun caretPositionChanged(event: CaretEvent) {
+                val editor = event.editor
+                if (editor.project != project || editor.isDisposed || project.isDisposed) return
+
+                val settings = I18nSettingsState.getInstance(project)
+                if (settings.state.displayMode != I18nDisplayMode.TRANSLATION_ONLY) return
+
+                collapseI18nFoldsOutsideCaret(project, editor)
+            }
+        }
+
+        EditorFactory.getInstance().eventMulticaster.addCaretListener(caretListener, project)
+
         val editorFactoryListener = object : EditorFactoryListener {
             override fun editorCreated(event: EditorFactoryEvent) {
                 val document = event.editor.document
@@ -88,6 +115,58 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
         Disposer.register(project) {
             debounceTimer.get()?.stop()
         }
+    }
+
+    private fun collapseI18nFoldsOutsideCaret(
+        project: com.intellij.openapi.project.Project,
+        editor: Editor
+    ) {
+        val caretOffset = editor.caretModel.offset
+        val candidates = editor.foldingModel.allFoldRegions.filter { region ->
+            region.isValid && region.isExpanded && !containsOffset(region, caretOffset)
+        }
+        if (candidates.isEmpty()) return
+
+        val regionsToCollapse = ReadAction.compute<List<FoldRegion>, RuntimeException> {
+            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return@compute emptyList()
+            val i18nFunctions = I18nFunctionResolver.getFunctions(project)
+            candidates.filter { region ->
+                isI18nTranslationRegion(region, psiFile, i18nFunctions)
+            }
+        }
+        if (regionsToCollapse.isEmpty()) return
+
+        editor.foldingModel.runBatchFoldingOperation {
+            regionsToCollapse.forEach { region ->
+                if (region.isValid && region.isExpanded && !containsOffset(region, caretOffset)) {
+                    region.isExpanded = false
+                }
+            }
+        }
+    }
+
+    private fun isI18nTranslationRegion(
+        region: FoldRegion,
+        psiFile: com.intellij.psi.PsiFile,
+        i18nFunctions: Set<String>
+    ): Boolean {
+        val element = psiFile.findElementAt(region.startOffset) ?: return false
+        val literal = PsiTreeUtil.getParentOfType(element, JSLiteralExpression::class.java, false) ?: return false
+        if (literal.textRange.startOffset != region.startOffset || literal.textRange.endOffset != region.endOffset) {
+            return false
+        }
+
+        val callExpression = PsiTreeUtil.getParentOfType(literal, JSCallExpression::class.java) ?: return false
+        val methodExpr = callExpression.methodExpression as? JSReferenceExpression ?: return false
+        val methodName = methodExpr.referenceName ?: return false
+        if (!i18nFunctions.contains(methodName)) return false
+
+        val args = callExpression.arguments
+        return args.isNotEmpty() && args[0] == literal
+    }
+
+    private fun containsOffset(region: FoldRegion, offset: Int): Boolean {
+        return offset >= region.startOffset && offset <= region.endOffset
     }
 
     /**
