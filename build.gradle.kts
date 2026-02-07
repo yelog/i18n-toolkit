@@ -139,6 +139,20 @@ tasks {
     publishPlugin {
         dependsOn(patchChangelog)
     }
+
+    buildSearchableOptions {
+        jvmArgs(
+            "-Xmx2g",
+            "-XX:+UseParallelGC",
+            // Disable plugin manager marketplace connections in headless mode
+            "-Didea.plugin.manager.enabled=false",
+            "-Dide.plugins.snapshot.on.unload.fail=false",
+            // Disable UI theme warnings
+            "-Didea.ui.theme.check=false",
+            // Disable JCEF warnings
+            "-Dide.browser.jcef.headless.enabled=false"
+        )
+    }
 }
 
 intellijPlatformTesting {
