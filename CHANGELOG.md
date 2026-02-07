@@ -3,6 +3,15 @@
 # i18n-toolkit Changelog
 
 ## [Unreleased]
+### Added
+- Java/Spring i18n support for string literal keys, including inline hints, key completion, quick documentation, unresolved-key annotation, and Cmd/Ctrl+Click references
+- Module-aware i18n lookup for multi-module projects, with dependency-module fallback when resolving keys
+- Detection of Spring message bundles in `src/main/resources` (e.g. `messages.properties`, `messages_zh_CN.properties`)
+
+### Changed
+- Extended cache snapshot/index structures with per-module translation data to support module-scoped key visibility and resolution
+- Added Spring filename locale extraction (`messages_xx[_YY]`) and integrated it into translation file path parsing
+- Enabled optional Java plugin dependency registration via `i18n-java.xml` and included `com.intellij.java` in bundled plugin configuration
 
 ## 0.0.4
 ### Fixed

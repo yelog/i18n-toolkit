@@ -62,6 +62,7 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>JavaScript</depends>
+    <depends optional="true" config-file="i18n-java.xml">com.intellij.modules.java</depends>
 
     <resource-bundle>messages.I18nBundle</resource-bundle>
 

@@ -57,7 +57,8 @@ data class TranslationEntry(
     val locale: String,
     val file: VirtualFile,
     val offset: Int,
-    val length: Int
+    val length: Int,
+    val moduleName: String? = null
 )
 
 data class TranslationFile(

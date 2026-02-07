@@ -18,6 +18,7 @@ import com.github.yelog.i18ntoolkit.parser.TranslationFileParser
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.util.I18nKeyGenerator
 import com.github.yelog.i18ntoolkit.util.I18nLocaleUtils
+import com.github.yelog.i18ntoolkit.util.I18nModuleResolver
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
 
 @Service(Service.Level.PROJECT)
@@ -70,11 +71,20 @@ class I18nCacheService(private val project: Project) : Disposable {
         val framework = I18nFrameworkDetector.detect(project)
         val data = TranslationData(framework)
         val keyIndex = mutableMapOf<String, MutableSet<TranslationEntry>>()
+        val moduleDataMap = mutableMapOf<String, TranslationData>()
 
         translationFiles.forEach { file ->
             ProgressManager.checkCanceled()
             try {
-                val pathInfo = I18nKeyGenerator.parseFilePath(file, basePath)
+                val isSpringMessage = I18nDirectoryScanner.isSpringMessageFile(file)
+                val pathInfo = if (isSpringMessage) {
+                    // For Spring message files, extract locale from filename suffix
+                    val locale = I18nLocaleUtils.extractLocaleFromSpringFilename(file.nameWithoutExtension)
+                    I18nKeyGenerator.PathInfo(locale = locale, module = null, businessUnit = null, keyPrefix = "")
+                } else {
+                    I18nKeyGenerator.parseFilePath(file, basePath)
+                }
+
                 val translationFile = TranslationFile(
                     file = file,
                     locale = pathInfo.locale,
@@ -92,20 +102,34 @@ class I18nCacheService(private val project: Project) : Disposable {
 
                 if (entries.isEmpty()) return@forEach
 
+                // Resolve the IntelliJ module for this file
+                val moduleName = I18nModuleResolver.getModuleName(project, file)
+
                 entries.forEach { (key, entry) ->
-                    translationFile.entries[key] = entry
-                    data.addEntry(entry)
-                    keyIndex.getOrPut(key) { linkedSetOf() }.add(entry)
+                    val entryWithModule = if (moduleName != null) entry.copy(moduleName = moduleName) else entry
+                    translationFile.entries[key] = entryWithModule
+                    data.addEntry(entryWithModule)
+                    keyIndex.getOrPut(key) { linkedSetOf() }.add(entryWithModule)
+
+                    // Also index by module
+                    if (moduleName != null) {
+                        val moduleData = moduleDataMap.getOrPut(moduleName) { TranslationData(framework) }
+                        moduleData.addEntry(entryWithModule)
+                    }
                 }
 
                 data.files.add(translationFile)
+                if (moduleName != null) {
+                    moduleDataMap.getOrPut(moduleName) { TranslationData(framework) }.files.add(translationFile)
+                }
             } catch (e: Exception) {
                 thisLogger().warn("I18n Toolkit: Failed to parse ${file.path}", e)
             }
         }
 
         val immutableKeyIndex = keyIndex.mapValues { (_, entries) -> entries.toSet() }
-        return CacheSnapshot(data, immutableKeyIndex)
+        val immutableModuleTranslations = moduleDataMap.toMap()
+        return CacheSnapshot(data, immutableKeyIndex, immutableModuleTranslations)
     }
 
     private fun publishSnapshot(snapshot: CacheSnapshot) {
@@ -197,6 +221,95 @@ class I18nCacheService(private val project: Project) : Disposable {
             .map { it.value }
     }
 
+    // --- Module-scoped queries for Spring Cloud microservice projects ---
+
+    /**
+     * Get translation for a key scoped to the module of the given file.
+     * Falls back to dependency modules, then global.
+     */
+    fun getTranslationForModule(key: String, file: VirtualFile, locale: String? = null): TranslationEntry? {
+        val moduleName = I18nModuleResolver.getModuleName(project, file)
+        if (moduleName != null) {
+            // 1. Try current module
+            val moduleData = cacheSnapshot.get().moduleTranslations[moduleName]
+            if (moduleData != null) {
+                val entry = moduleData.getTranslation(key, locale)
+                if (entry != null) return entry
+            }
+
+            // 2. Try dependency modules
+            val depModules = I18nModuleResolver.getDependencyModuleNames(project, moduleName)
+            for (depModule in depModules) {
+                val depData = cacheSnapshot.get().moduleTranslations[depModule]
+                if (depData != null) {
+                    val entry = depData.getTranslation(key, locale)
+                    if (entry != null) return entry
+                }
+            }
+        }
+
+        // 3. Fallback to global
+        return getTranslation(key, locale)
+    }
+
+    /**
+     * Get all translations for a key scoped to the module of the given file.
+     */
+    fun getAllTranslationsForModule(key: String, file: VirtualFile): Map<String, TranslationEntry> {
+        val moduleName = I18nModuleResolver.getModuleName(project, file)
+        val result = mutableMapOf<String, TranslationEntry>()
+
+        if (moduleName != null) {
+            // Collect from current module
+            cacheSnapshot.get().moduleTranslations[moduleName]?.getAllTranslations(key)?.let {
+                result.putAll(it)
+            }
+
+            // Collect from dependency modules
+            val depModules = I18nModuleResolver.getDependencyModuleNames(project, moduleName)
+            for (depModule in depModules) {
+                cacheSnapshot.get().moduleTranslations[depModule]?.getAllTranslations(key)?.let { depEntries ->
+                    depEntries.forEach { (locale, entry) ->
+                        result.putIfAbsent(locale, entry)
+                    }
+                }
+            }
+        }
+
+        // If nothing found in module scope, fallback to global
+        if (result.isEmpty()) {
+            return getAllTranslations(key)
+        }
+        return result
+    }
+
+    /**
+     * Get all keys visible to the module of the given file.
+     */
+    fun getAllKeysForModule(file: VirtualFile): Set<String> {
+        val moduleName = I18nModuleResolver.getModuleName(project, file)
+        if (moduleName == null) return getAllKeys()
+
+        val keys = mutableSetOf<String>()
+
+        // Keys from current module
+        cacheSnapshot.get().moduleTranslations[moduleName]?.translations?.keys?.let {
+            keys.addAll(it)
+        }
+
+        // Keys from dependency modules
+        val depModules = I18nModuleResolver.getDependencyModuleNames(project, moduleName)
+        for (depModule in depModules) {
+            cacheSnapshot.get().moduleTranslations[depModule]?.translations?.keys?.let {
+                keys.addAll(it)
+            }
+        }
+
+        // If no module-scoped keys found, fallback to global
+        if (keys.isEmpty()) return getAllKeys()
+        return keys
+    }
+
     override fun dispose() {
         cacheSnapshot.set(CacheSnapshot.EMPTY)
         initialized.set(false)
@@ -204,10 +317,11 @@ class I18nCacheService(private val project: Project) : Disposable {
 
     private data class CacheSnapshot(
         val translationData: TranslationData,
-        val keyToEntries: Map<String, Set<TranslationEntry>>
+        val keyToEntries: Map<String, Set<TranslationEntry>>,
+        val moduleTranslations: Map<String, TranslationData> = emptyMap()
     ) {
         companion object {
-            val EMPTY = CacheSnapshot(TranslationData(I18nFramework.UNKNOWN), emptyMap())
+            val EMPTY = CacheSnapshot(TranslationData(I18nFramework.UNKNOWN), emptyMap(), emptyMap())
         }
     }
 

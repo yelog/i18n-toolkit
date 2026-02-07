@@ -15,8 +15,22 @@ object I18nLocaleUtils {
         Regex("^ko[_-]KR$", RegexOption.IGNORE_CASE)
     )
 
+    /**
+     * Pattern for Spring message bundle filenames: messages_zh_CN, messages_en, etc.
+     */
+    private val SPRING_BASENAME_LOCALE_PATTERN = Regex("^messages_([a-zA-Z]{2}(?:_[a-zA-Z]{2})?)$")
+
     fun isLocaleName(name: String): Boolean {
         return localePatterns.any { it.matches(name) }
+    }
+
+    /**
+     * Extract locale from a Spring message bundle filename.
+     * e.g., "messages_zh_CN" → "zh_CN", "messages_en" → "en", "messages" → default locale
+     */
+    fun extractLocaleFromSpringFilename(fileNameWithoutExtension: String): String {
+        val match = SPRING_BASENAME_LOCALE_PATTERN.matchEntire(fileNameWithoutExtension)
+        return match?.groupValues?.get(1) ?: "default"
     }
 
     fun normalizeLocale(name: String): String {

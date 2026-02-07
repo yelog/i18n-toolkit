@@ -1,0 +1,24 @@
+<idea-plugin>
+    <extensions defaultExtensionNs="com.intellij">
+        <!-- Inlay hints for showing translations inline in Java files -->
+        <codeInsight.inlayProvider language="JAVA"
+                                   implementationClass="com.github.yelog.i18ntoolkit.spring.JavaI18nInlayHintsProvider"/>
+
+        <!-- Reference contributor for Cmd+Click navigation in Java files -->
+        <psi.referenceContributor language="JAVA"
+                                  implementation="com.github.yelog.i18ntoolkit.spring.JavaI18nReferenceContributor"/>
+
+        <!-- Annotator for highlighting missing i18n keys in Java files -->
+        <annotator language="JAVA"
+                   implementationClass="com.github.yelog.i18ntoolkit.spring.JavaI18nKeyAnnotator"/>
+
+        <!-- Completion for i18n keys in Java files -->
+        <completion.contributor language="JAVA"
+                                implementationClass="com.github.yelog.i18ntoolkit.spring.JavaI18nKeyCompletionContributor"/>
+
+        <!-- Documentation provider for Quick Definition/Documentation on i18n keys in Java files -->
+        <lang.documentationProvider language="JAVA"
+                                    implementationClass="com.github.yelog.i18ntoolkit.spring.JavaI18nDocumentationProvider"
+                                    order="first"/>
+    </extensions>
+</idea-plugin>

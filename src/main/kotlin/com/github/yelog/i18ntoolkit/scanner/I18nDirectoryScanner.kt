@@ -12,6 +12,11 @@ object I18nDirectoryScanner {
 
     private val excludedDirNames = setOf("node_modules", "dist", "build")
 
+    /**
+     * Regex pattern for Spring message bundle files: messages.properties, messages_zh_CN.properties, etc.
+     */
+    private val SPRING_MESSAGE_PATTERN = Regex("^messages(_[a-zA-Z]{2}(_[a-zA-Z]{2})?)?\\.properties$")
+
     fun scanForTranslationFiles(project: Project): List<VirtualFile> {
         val baseDir = project.guessProjectDir() ?: return emptyList()
         val translationFiles = mutableListOf<VirtualFile>()
@@ -19,6 +24,9 @@ object I18nDirectoryScanner {
         findI18nDirectories(baseDir).forEach { dir ->
             collectTranslationFiles(dir, translationFiles)
         }
+
+        // Also scan for Spring message properties in src/main/resources directories
+        findSpringMessageFiles(baseDir, translationFiles)
 
         return translationFiles
     }
@@ -55,7 +63,46 @@ object I18nDirectoryScanner {
         return name.lowercase() !in excludedDirNames
     }
 
+    /**
+     * Find Spring message bundle files (messages*.properties) in src/main/resources directories.
+     */
+    private fun findSpringMessageFiles(root: VirtualFile, result: MutableList<VirtualFile>) {
+        VfsUtil.iterateChildrenRecursively(root, ::shouldTraverse) { file ->
+            if (!file.isDirectory && isSpringMessageFile(file)) {
+                // Check that it's under a "resources" directory (typically src/main/resources)
+                if (isUnderResourcesDir(file)) {
+                    if (!result.contains(file)) {
+                        result.add(file)
+                    }
+                }
+            }
+            true
+        }
+    }
+
+    /**
+     * Check if a file matches the Spring message bundle naming pattern.
+     */
+    fun isSpringMessageFile(file: VirtualFile): Boolean {
+        return SPRING_MESSAGE_PATTERN.matches(file.name)
+    }
+
+    /**
+     * Check if a file is under a "resources" directory.
+     */
+    private fun isUnderResourcesDir(file: VirtualFile): Boolean {
+        var parent = file.parent
+        while (parent != null) {
+            if (parent.name == "resources") return true
+            parent = parent.parent
+        }
+        return false
+    }
+
     fun isTranslationFile(file: VirtualFile): Boolean {
+        // Check for Spring message files
+        if (isSpringMessageFile(file) && isUnderResourcesDir(file)) return true
+
         val ext = file.extension?.lowercase() ?: return false
         if (!TranslationFileType.allExtensions().contains(ext)) return false
 
