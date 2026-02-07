@@ -28,10 +28,11 @@ class JavaI18nKeyCompletionContributor : CompletionContributor() {
 
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
         val position = parameters.position
+        val originalPosition = parameters.originalPosition
         val project = position.project
 
-        val literal = findLiteral(position) ?: return
-        if (!isI18nContext(literal)) return
+        val contextLiteral = findLiteral(originalPosition ?: position) ?: findLiteral(position) ?: return
+        if (!isI18nContext(contextLiteral)) return
 
         // Completion PSI may run on a copied file where position.containingFile has no VirtualFile.
         val sourceFile = parameters.originalFile.virtualFile ?: position.containingFile?.virtualFile
@@ -43,7 +44,8 @@ class JavaI18nKeyCompletionContributor : CompletionContributor() {
 
         val settings = I18nSettingsState.getInstance(project)
         val displayLocale = settings.getDisplayLocaleOrNull()
-        val currentInput = extractCurrentInput(literal, parameters.offset)
+        val caretOffset = parameters.editor.caretModel.offset
+        val currentInput = extractCurrentInput(contextLiteral, caretOffset)
 
         val rankedKeys = allKeys
             .map { key ->

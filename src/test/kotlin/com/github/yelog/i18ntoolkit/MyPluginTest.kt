@@ -220,6 +220,46 @@ class MyPluginTest : BasePlatformTestCase() {
         assertTrue(contributor.invokeAutoPopup(position!!, 'i'))
     }
 
+    fun testJavaCompletionWorksWhenLiteralIsEscapedContent() {
+        val settings = I18nSettingsState.getInstance(project)
+        settings.state.customI18nFunctions = "t, \$t, LangUtil.get"
+
+        myFixture.tempDirFixture.createFile(
+            "build.gradle.kts",
+            """
+            plugins {
+                java
+            }
+            dependencies {
+                implementation("org.springframework.boot:spring-boot-starter")
+            }
+            """.trimIndent()
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/main/resources/i18n/messages_en_US.properties",
+            "tray.uwipBarcode.required=UwipBarcode Required"
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        myFixture.configureByText(
+            "DemoEscaped.java",
+            """
+            class DemoEscaped {
+                String value() {
+                    return LangUtil.get("tray.uwipBarcode.req<caret>uired");
+                }
+            }
+            """.trimIndent()
+        )
+
+        val lookupElements = myFixture.completeBasic()
+        assertNotNull(lookupElements)
+        val lookupStrings = lookupElements!!.mapNotNull { it.lookupString }
+        assertContainsElements(lookupStrings, "tray.uwipBarcode.required")
+    }
+
     fun testFindUsagesFromSpringPropertiesFindsJavaLangUtilGetReferences() {
         val settings = I18nSettingsState.getInstance(project)
         settings.state.customI18nFunctions = "t, \$t, LangUtil.get"
