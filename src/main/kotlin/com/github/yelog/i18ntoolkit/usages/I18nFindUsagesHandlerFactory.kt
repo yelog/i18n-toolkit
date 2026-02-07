@@ -182,8 +182,10 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
         if (fileText.isEmpty()) return null
 
         val safeOffset = element.textOffset.coerceIn(0, fileText.length - 1)
-        val lineStart = fileText.lastIndexOf('\n', safeOffset).let { if (it < 0) 0 else it + 1 }
-        val lineEnd = fileText.indexOf('\n', safeOffset).let { if (it < 0) fileText.length else it }
+        val scanOffset = if (fileText[safeOffset] == '\n' && safeOffset > 0) safeOffset - 1 else safeOffset
+        val lineStart = fileText.lastIndexOf('\n', scanOffset).let { if (it < 0) 0 else it + 1 }
+        val lineEnd = fileText.indexOf('\n', scanOffset).let { if (it < 0) fileText.length else it }
+        if (lineStart > lineEnd) return null
         val line = fileText.substring(lineStart, lineEnd)
         return parsePropertiesKey(line)
     }

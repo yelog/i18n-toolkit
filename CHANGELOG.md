@@ -12,6 +12,7 @@
 - Java `LangUtil.get(...)` i18n key completion now auto-popups reliably while typing and no longer loses candidates when completion runs on copied PSI files
 - Spring `.properties` translation keys now participate in plugin Find Usages / reference search for Java i18n calls, resolving false "unused key" gray states
 - Custom i18n function parsing now accepts Chinese separators (`，` / `；`) in settings and resolves qualified method names case-insensitively (e.g. `LangUtil.get` vs `langUtil.get`)
+- Fixed a `StringIndexOutOfBoundsException` in properties key fallback parsing during usage highlighting when caret/element offset lands on a newline boundary
 
 ### Changed
 - Extended cache snapshot/index structures with per-module translation data to support module-scoped key visibility and resolution
