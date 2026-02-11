@@ -18,14 +18,6 @@ import com.intellij.psi.util.PsiTreeUtil
  */
 class JavaI18nKeyCompletionContributor : CompletionContributor() {
 
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun invokeAutoPopup(position: PsiElement, typeChar: Char): Boolean {
-        if (!shouldTrigger(typeChar)) return false
-        val literal = findLiteral(position) ?: return false
-        if (literal.value !is String) return false
-        return isI18nContext(literal)
-    }
-
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
         val position = parameters.position
         val originalPosition = parameters.originalPosition
@@ -133,10 +125,6 @@ class JavaI18nKeyCompletionContributor : CompletionContributor() {
         val nameValuePair = PsiTreeUtil.getParentOfType(literal, com.intellij.psi.PsiNameValuePair::class.java)
         val attrName = nameValuePair?.name ?: nameValuePair?.attributeName
         return attrName == "message"
-    }
-
-    private fun shouldTrigger(charTyped: Char): Boolean {
-        return charTyped.isLetterOrDigit() || charTyped == '.' || charTyped == '_' || charTyped == '-'
     }
 }
 

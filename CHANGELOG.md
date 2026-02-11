@@ -3,6 +3,7 @@
 # i18n-toolkit Changelog
 
 ## [Unreleased]
+## 0.0.5
 ### Added
 - Java/Spring i18n support for string literal keys, including inline hints, key completion, quick documentation, unresolved-key annotation, and Cmd/Ctrl+Click references
 - Module-aware i18n lookup for multi-module projects, with dependency-module fallback when resolving keys
@@ -18,6 +19,10 @@
 - Extended cache snapshot/index structures with per-module translation data to support module-scoped key visibility and resolution
 - Added Spring filename locale extraction (`messages_xx[_YY]`) and integrated it into translation file path parsing
 - Enabled optional Java plugin dependency registration via `i18n-java.xml` and included `com.intellij.java` in bundled plugin configuration
+- Set Kotlin `jvmDefault` to `NO_COMPATIBILITY` to avoid synthetic deprecated bridge methods on interface default APIs
+
+### Compatibility
+- Replaced deprecated API paths reported by IntelliJ 2026.1 EAP: removed `CompletionContributor.invokeAutoPopup(...)` override, removed `DynamicPluginListener.checkUnloadPlugin(...)` override, removed explicit `StatusBarWidget.getPresentation(PlatformType)` implementation, and migrated daemon refresh to a non-deprecated restart path with runtime compatibility fallback
 
 ## 0.0.4
 ### Fixed

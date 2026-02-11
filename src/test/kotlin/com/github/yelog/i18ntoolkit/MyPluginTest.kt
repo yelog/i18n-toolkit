@@ -1,6 +1,7 @@
 package com.github.yelog.i18ntoolkit
 
 import com.intellij.ide.highlighter.XmlFileType
+import com.intellij.codeInsight.editorActions.TypedHandlerDelegate
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.PsiManager
@@ -12,7 +13,7 @@ import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.util.PsiErrorElementUtil
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
-import com.github.yelog.i18ntoolkit.spring.JavaI18nKeyCompletionContributor
+import com.github.yelog.i18ntoolkit.spring.JavaI18nTypedHandler
 import com.github.yelog.i18ntoolkit.spring.SpringMessagePatternMatcher
 import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
 import com.github.yelog.i18ntoolkit.util.I18nKeyExtractor
@@ -213,12 +214,14 @@ class MyPluginTest : BasePlatformTestCase() {
             """.trimIndent()
         )
 
-        val caretOffset = myFixture.caretOffset
-        val position = psiFile.findElementAt((caretOffset - 1).coerceAtLeast(0))
-        assertNotNull(position)
-
-        val contributor = JavaI18nKeyCompletionContributor()
-        assertTrue(contributor.invokeAutoPopup(position!!, 'i'))
+        val handler = JavaI18nTypedHandler()
+        val result = handler.checkAutoPopup(
+            'i',
+            project,
+            myFixture.editor,
+            psiFile
+        )
+        assertEquals(TypedHandlerDelegate.Result.STOP, result)
     }
 
     fun testJavaCompletionWorksWhenLiteralIsEscapedContent() {

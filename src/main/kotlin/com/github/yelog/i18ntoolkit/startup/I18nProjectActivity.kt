@@ -49,7 +49,6 @@ class I18nProjectActivity : ProjectActivity {
  * Listener for dynamic plugin loading - initializes cache when plugin is loaded
  * without requiring IDE restart
  */
-@Suppress("removal")
 class I18nDynamicPluginListener : DynamicPluginListener {
 
     override fun pluginLoaded(pluginDescriptor: IdeaPluginDescriptor) {
@@ -69,14 +68,6 @@ class I18nDynamicPluginListener : DynamicPluginListener {
         if (pluginDescriptor.pluginId.idString == "com.github.yelog.i18ntoolkit") {
             I18nProjectActivity.uninstallQuickDocOverride()
         }
-    }
-
-    // Explicitly override deprecated/experimental methods to prevent Kotlin from generating super calls
-    // These overrides ensure compatibility with older IDE versions where default implementations don't exist
-
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun checkUnloadPlugin(pluginDescriptor: IdeaPluginDescriptor) {
-        // No-op: default behavior is acceptable
     }
 
     override fun beforePluginLoaded(pluginDescriptor: IdeaPluginDescriptor) {

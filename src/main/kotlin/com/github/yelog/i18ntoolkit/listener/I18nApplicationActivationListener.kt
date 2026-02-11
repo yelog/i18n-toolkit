@@ -7,7 +7,6 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.wm.IdeFrame
-import com.intellij.psi.PsiManager
 
 /**
  * Listens for application activation events and clears inlay hints cache.
@@ -23,6 +22,7 @@ class I18nApplicationActivationListener : ApplicationActivationListener {
         private var lastActivationTime = 0L
         // Only trigger refresh if IDEA was inactive for more than 30 seconds
         private const val MIN_INACTIVE_DURATION_MS = 30_000L
+        private const val RESTART_METHOD = "restart"
     }
 
     override fun applicationActivated(ideFrame: IdeFrame) {
@@ -49,15 +49,30 @@ class I18nApplicationActivationListener : ApplicationActivationListener {
         // This is more efficient than full file reparsing
         ApplicationManager.getApplication().invokeLater {
             if (!project.isDisposed) {
-                val fileEditorManager = FileEditorManager.getInstance(project)
-                val psiManager = PsiManager.getInstance(project)
-
-                fileEditorManager.openFiles.forEach { virtualFile ->
-                    psiManager.findFile(virtualFile)?.let { psiFile ->
-                        DaemonCodeAnalyzer.getInstance(project).restart(psiFile)
-                    }
+                val hasOpenFiles = FileEditorManager.getInstance(project).openFiles.isNotEmpty()
+                if (hasOpenFiles) {
+                    restartDaemonAnalysis(project)
                 }
             }
         }
+    }
+
+    private fun restartDaemonAnalysis(project: com.intellij.openapi.project.Project) {
+        val analyzer = DaemonCodeAnalyzer.getInstance(project)
+        val analyzerClass = analyzer.javaClass
+
+        // 2026.1+ prefers restart(Object reason); older IDEs only provide restart().
+        val restartWithReason = analyzerClass.methods.firstOrNull {
+            it.name == RESTART_METHOD && it.parameterCount == 1 && it.parameterTypes[0] == Any::class.java
+        }
+        if (restartWithReason != null) {
+            restartWithReason.invoke(analyzer, I18nApplicationActivationListener::class.java.name)
+            return
+        }
+
+        val restartNoArgs = analyzerClass.methods.firstOrNull {
+            it.name == RESTART_METHOD && it.parameterCount == 0
+        } ?: return
+        restartNoArgs.invoke(analyzer)
     }
 }

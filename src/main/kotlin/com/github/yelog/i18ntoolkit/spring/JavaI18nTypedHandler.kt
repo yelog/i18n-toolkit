@@ -5,9 +5,11 @@ import com.intellij.codeInsight.editorActions.TypedHandlerDelegate
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiAnnotation
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.PsiMethodCallExpression
+import com.intellij.psi.PsiNameValuePair
 import com.intellij.psi.util.PsiTreeUtil
 
 /**
@@ -30,12 +32,26 @@ class JavaI18nTypedHandler : TypedHandlerDelegate() {
         val literal = PsiTreeUtil.getParentOfType(element, PsiLiteralExpression::class.java, false) ?: return Result.CONTINUE
         if (literal.value !is String) return Result.CONTINUE
 
-        val methodCall = PsiTreeUtil.getParentOfType(literal, PsiMethodCallExpression::class.java, false)
-            ?: return Result.CONTINUE
-        if (!SpringMessagePatternMatcher.isSpringI18nCall(methodCall)) return Result.CONTINUE
+        if (!isI18nContext(literal)) return Result.CONTINUE
 
         AutoPopupController.getInstance(project).scheduleAutoPopup(editor)
         return Result.STOP
+    }
+
+    private fun isI18nContext(literal: PsiLiteralExpression): Boolean {
+        val methodCall = PsiTreeUtil.getParentOfType(literal, PsiMethodCallExpression::class.java)
+        val annotation = PsiTreeUtil.getParentOfType(literal, PsiAnnotation::class.java)
+        return when {
+            methodCall != null -> SpringMessagePatternMatcher.isSpringI18nCall(methodCall)
+            annotation != null -> isValidationAnnotationMessage(literal)
+            else -> false
+        }
+    }
+
+    private fun isValidationAnnotationMessage(literal: PsiLiteralExpression): Boolean {
+        val nameValuePair = PsiTreeUtil.getParentOfType(literal, PsiNameValuePair::class.java)
+        val attrName = nameValuePair?.name ?: nameValuePair?.attributeName
+        return attrName == "message"
     }
 
     private fun shouldTrigger(charTyped: Char): Boolean {
