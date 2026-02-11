@@ -185,6 +185,7 @@
         <referencesSearch implementation="com.github.yelog.i18ntoolkit.reference.I18nUsageSearcher"/>
         <findUsagesHandlerFactory implementation="com.github.yelog.i18ntoolkit.usages.I18nFindUsagesHandlerFactory"
                                   order="first"/>
+        <renamePsiElementProcessor implementation="com.github.yelog.i18ntoolkit.rename.I18nKeyRenameProcessor"/>
 
         <!-- Search Everywhere tab for i18n translations -->
         <searchEverywhereContributor implementation="com.github.yelog.i18ntoolkit.searcheverywhere.I18nSearchEverywhereContributorFactory"/>

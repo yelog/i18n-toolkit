@@ -2,17 +2,26 @@ package com.github.yelog.i18ntoolkit.popup
 
 import com.github.yelog.i18ntoolkit.model.TranslationEntry
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.util.I18nTranslationConsistencySupport
 import com.github.yelog.i18ntoolkit.util.I18nTranslationWriter
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.popup.JBPopup
 import com.intellij.openapi.ui.popup.JBPopupFactory
-import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.Alarm
 import com.intellij.util.ui.JBUI
-import java.awt.*
-import javax.swing.*
+import java.awt.BorderLayout
+import java.awt.Component
+import java.awt.Container
+import java.awt.FlowLayout
+import java.awt.FocusTraversalPolicy
+import java.awt.Font
+import javax.swing.JButton
+import javax.swing.JPanel
+import javax.swing.SwingUtilities
 import javax.swing.event.DocumentEvent
 import javax.swing.event.DocumentListener
 
@@ -29,29 +38,27 @@ object I18nTranslationEditPopup {
         val panel = JPanel(BorderLayout())
         panel.border = JBUI.Borders.empty(8)
 
-        // Header
         val header = JBLabel(key)
         header.font = header.font.deriveFont(Font.BOLD)
         header.border = JBUI.Borders.emptyBottom(8)
         panel.add(header, BorderLayout.NORTH)
 
-        // Sort locales: display locale first, rest sorted
         val sortedLocales = allLocales.sortedWith(compareBy<String> { it != displayLocale }.thenBy { it })
 
-        // Fields panel
-        val fieldsPanel = JPanel(GridBagLayout())
-        val gbc = GridBagConstraints().apply {
-            fill = GridBagConstraints.HORIZONTAL
+        val fieldsPanel = JPanel(java.awt.GridBagLayout())
+        val gbc = java.awt.GridBagConstraints().apply {
+            fill = java.awt.GridBagConstraints.HORIZONTAL
             insets = JBUI.insets(2, 0)
         }
 
         val textFields = mutableListOf<JBTextField>()
         val cacheService = I18nCacheService.getInstance(project)
 
-        for ((index, locale) in sortedLocales.withIndex()) {
-            val entry = translations[locale]
+        var popupRef: JBPopup? = null
 
-            // Label
+        for ((index, locale) in sortedLocales.withIndex()) {
+            var entry = translations[locale]
+
             gbc.gridx = 0
             gbc.gridy = index
             gbc.weightx = 0.0
@@ -60,7 +67,6 @@ object I18nTranslationEditPopup {
             label.font = label.font.deriveFont(Font.BOLD)
             fieldsPanel.add(label, gbc)
 
-            // Text field
             gbc.gridx = 1
             gbc.weightx = 1.0
             gbc.insets = JBUI.insets(2, 0)
@@ -69,28 +75,40 @@ object I18nTranslationEditPopup {
             textFields.add(field)
             fieldsPanel.add(field, gbc)
 
-            // Debounced write on edit
-            if (entry != null) {
-                val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD)
-                field.document.addDocumentListener(object : DocumentListener {
-                    override fun insertUpdate(e: DocumentEvent) = scheduleUpdate()
-                    override fun removeUpdate(e: DocumentEvent) = scheduleUpdate()
-                    override fun changedUpdate(e: DocumentEvent) = scheduleUpdate()
+            val alarm = Alarm(Alarm.ThreadToUse.SWING_THREAD)
+            field.document.addDocumentListener(object : DocumentListener {
+                override fun insertUpdate(e: DocumentEvent) = scheduleUpdate()
+                override fun removeUpdate(e: DocumentEvent) = scheduleUpdate()
+                override fun changedUpdate(e: DocumentEvent) = scheduleUpdate()
 
-                    private fun scheduleUpdate() {
-                        alarm.cancelAllRequests()
-                        alarm.addRequest({
-                            val newValue = field.text
-                            if (newValue != entry.value) {
-                                I18nTranslationWriter.updateTranslationValue(project, entry, newValue)
-                                cacheService.refresh()
+                private fun scheduleUpdate() {
+                    alarm.cancelAllRequests()
+                    alarm.addRequest({
+                        val newValue = field.text
+
+                        if (entry == null) {
+                            val created = I18nTranslationConsistencySupport.createMissingTranslation(
+                                project = project,
+                                key = key,
+                                locale = locale,
+                                initialValue = newValue
+                            )
+                            if (created != null) {
+                                entry = created
                             }
-                        }, 300)
-                    }
-                })
-            }
+                            return@addRequest
+                        }
 
-            // Select all on focus
+                        val current = entry ?: return@addRequest
+                        if (newValue != current.value) {
+                            I18nTranslationWriter.updateTranslationValue(project, current, newValue)
+                            cacheService.refresh()
+                            entry = current.copy(value = newValue)
+                        }
+                    }, 300)
+                }
+            })
+
             field.addFocusListener(object : java.awt.event.FocusAdapter() {
                 override fun focusGained(e: java.awt.event.FocusEvent?) {
                     SwingUtilities.invokeLater { field.selectAll() }
@@ -98,7 +116,6 @@ object I18nTranslationEditPopup {
             })
         }
 
-        // Custom focus traversal: Tab cycles through fields, wrapping
         if (textFields.size > 1) {
             fieldsPanel.isFocusCycleRoot = true
             fieldsPanel.focusTraversalPolicy = object : FocusTraversalPolicy() {
@@ -120,6 +137,37 @@ object I18nTranslationEditPopup {
 
         panel.add(fieldsPanel, BorderLayout.CENTER)
 
+        val missingTargets = I18nTranslationConsistencySupport.collectMissingTargets(cacheService, key, sortedLocales)
+        val actionsPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 8))
+        val missingLabel = JBLabel(
+            if (missingTargets.isEmpty()) {
+                "All locales are complete"
+            } else {
+                "Missing translations: ${missingTargets.joinToString { it.locale }}"
+            }
+        )
+        actionsPanel.add(missingLabel)
+
+        val fillButton = JButton("Fill Missing")
+        fillButton.isEnabled = missingTargets.isNotEmpty()
+        fillButton.addActionListener {
+            val createdCount = I18nTranslationConsistencySupport.fillMissingTranslations(
+                project = project,
+                key = key,
+                allLocales = sortedLocales
+            )
+            if (createdCount <= 0) return@addActionListener
+
+            val updatedTranslations = cacheService.getAllTranslations(key)
+            val updatedLocales = cacheService.getAvailableLocales()
+            popupRef?.cancel()
+            ApplicationManager.getApplication().invokeLater {
+                show(project, editor, key, updatedTranslations, displayLocale, updatedLocales)
+            }
+        }
+        actionsPanel.add(fillButton)
+        panel.add(actionsPanel, BorderLayout.SOUTH)
+
         val popup = JBPopupFactory.getInstance()
             .createComponentPopupBuilder(panel, textFields.firstOrNull())
             .setTitle("Edit Translations")
@@ -132,6 +180,7 @@ object I18nTranslationEditPopup {
             .setCancelKeyEnabled(true)
             .createPopup()
 
+        popupRef = popup
         popup.showInBestPositionFor(editor)
     }
 }
