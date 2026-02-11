@@ -160,5 +160,74 @@ class I18nEnhancementTest : BasePlatformTestCase() {
         assertTrue(cacheService.getAllTranslations("common.greet").isEmpty())
     }
 
+    fun testRenameI18nKeyBlockedWhenTargetExists() {
+        myFixture.tempDirFixture.createFile(
+            "src/locales/en/common.json",
+            """
+            {
+              "greet": "Hello",
+              "welcome": "Welcome"
+            }
+            """.trimIndent()
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/locales/zh/common.json",
+            """
+            {
+              "greet": "你好",
+              "welcome": "欢迎"
+            }
+            """.trimIndent()
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/main.ts",
+            """
+            const { t } = useTranslation('common')
+            const message = t('greet')
+            """.trimIndent()
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        val enFile = myFixture.findFileInTempDir("src/locales/en/common.json")
+        assertNotNull(enFile)
+
+        myFixture.openFileInEditor(enFile!!)
+        val greetOffset = myFixture.editor.document.text.indexOf("greet")
+        assertTrue(greetOffset >= 0)
+        myFixture.editor.caretModel.moveToOffset(greetOffset + 1)
+
+        val elementAtCaret = myFixture.file.findElementAt(myFixture.editor.caretModel.offset)
+        assertNotNull(elementAtCaret)
+
+        val property = PsiTreeUtil.getParentOfType(elementAtCaret, JsonProperty::class.java, false)
+        assertNotNull(property)
+
+        val processor = I18nKeyRenameProcessor()
+        assertTrue(processor.canProcessElement(property!!))
+
+        val usages = ReferencesSearch.search(property).findAll()
+            .map { UsageInfo(it) }
+            .toTypedArray()
+
+        processor.renameElement(property, "welcome", usages, null)
+
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        val enText = VfsUtil.loadText(myFixture.findFileInTempDir("src/locales/en/common.json")!!)
+        val zhText = VfsUtil.loadText(myFixture.findFileInTempDir("src/locales/zh/common.json")!!)
+        val sourceText = VfsUtil.loadText(myFixture.findFileInTempDir("src/main.ts")!!)
+
+        assertTrue(enText.contains("\"greet\""))
+        assertTrue(enText.contains("\"welcome\""))
+
+        assertTrue(zhText.contains("\"greet\""))
+        assertTrue(zhText.contains("\"welcome\""))
+
+        assertTrue(sourceText.contains("t('greet')"))
+        assertFalse(sourceText.contains("t('welcome')"))
+    }
+
     override fun getTestDataPath() = "src/test/testData"
 }

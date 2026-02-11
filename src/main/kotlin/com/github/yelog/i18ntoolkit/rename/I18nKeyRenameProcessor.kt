@@ -7,6 +7,8 @@ import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.spring.SpringMessagePatternMatcher
 import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
 import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
+import com.intellij.notification.NotificationGroupManager
+import com.intellij.notification.NotificationType
 import com.intellij.json.psi.JsonProperty
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
@@ -15,15 +17,16 @@ import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiLiteralExpression
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiRecursiveElementVisitor
+import com.intellij.psi.search.FilenameIndex
+import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.refactoring.listeners.RefactoringElementListener
 import com.intellij.refactoring.rename.RenamePsiElementProcessor
@@ -55,6 +58,10 @@ class I18nKeyRenameProcessor : RenamePsiElementProcessor() {
         }
 
         val project = element.project
+        if (hasRenameConflict(project, oldFullKey, newFullKey)) {
+            notifyRenameConflict(project, oldFullKey, newFullKey)
+            return
+        }
 
         WriteCommandAction.runWriteCommandAction(project, "Rename i18n key", null, Runnable {
             renameTranslationDeclarations(project, oldFullKey, newFullKey)
@@ -119,18 +126,17 @@ class I18nKeyRenameProcessor : RenamePsiElementProcessor() {
 
     private fun renameCodeUsagesByScan(project: Project, oldFullKey: String, newFullKey: String) {
         val psiManager = PsiManager.getInstance(project)
-        val baseDir = project.guessProjectDir() ?: return
-        val candidates = linkedSetOf<VirtualFile>()
-        VfsUtil.iterateChildrenRecursively(baseDir, ::shouldTraverse) { file ->
-            if (!file.isDirectory && file.extension?.lowercase() in SOURCE_EXTENSIONS) {
-                candidates.add(file)
-            }
-            true
-        }
+        val candidates = collectCandidateSourceFiles(project)
+        if (candidates.isEmpty()) return
 
+        val oldLeaf = oldFullKey.substringAfterLast('.')
         val jsFunctions = I18nFunctionResolver.getFunctions(project)
 
         for (file in candidates) {
+            val document = FileDocumentManager.getInstance().getDocument(file)
+            val fileText = document?.text ?: continue
+            if (!mightContainRenameTarget(fileText, oldFullKey, oldLeaf)) continue
+
             val psiFile = psiManager.findFile(file) ?: continue
             val jsTargets = mutableListOf<Pair<JSLiteralExpression, String>>()
             val javaTargets = mutableListOf<Pair<PsiLiteralExpression, String>>()
@@ -379,6 +385,26 @@ class I18nKeyRenameProcessor : RenamePsiElementProcessor() {
         return RenameContext(sourceElement, fullKey, translationFile.keyPrefix, mode)
     }
 
+    private fun hasRenameConflict(project: Project, oldFullKey: String, newFullKey: String): Boolean {
+        val cacheService = I18nCacheService.getInstance(project)
+        cacheService.initialize()
+        val targetTranslations = cacheService.getAllTranslations(newFullKey)
+        if (targetTranslations.isEmpty()) return false
+        val sourceTranslations = cacheService.getAllTranslations(oldFullKey)
+        if (sourceTranslations.isEmpty()) return false
+        return targetTranslations.keys.intersect(sourceTranslations.keys).isNotEmpty()
+    }
+
+    private fun notifyRenameConflict(project: Project, oldFullKey: String, newFullKey: String) {
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup("I18n Toolkit")
+            .createNotification(
+                "Rename blocked: target key '$newFullKey' already exists. Source key '$oldFullKey' was not modified.",
+                NotificationType.WARNING
+            )
+            .notify(project)
+    }
+
     private fun findTranslationElement(element: PsiElement): PsiElement? {
         var current: PsiElement? = element
         while (current != null) {
@@ -601,6 +627,35 @@ class I18nKeyRenameProcessor : RenamePsiElementProcessor() {
         return ParsedLine(indent, rawKey, normalizedKey, valuePart)
     }
 
+    private fun collectCandidateSourceFiles(project: Project): List<VirtualFile> {
+        val indexScope = GlobalSearchScope.projectScope(project)
+        val projectFileIndex = ProjectFileIndex.getInstance(project)
+        val files = linkedSetOf<VirtualFile>()
+
+        SOURCE_EXTENSIONS.forEach { extension ->
+            val indexedFiles = FilenameIndex.getAllFilesByExt(project, extension, indexScope)
+            indexedFiles.forEach { file ->
+                if (!projectFileIndex.isInContent(file)) return@forEach
+                if (isExcludedPath(file)) return@forEach
+                files.add(file)
+            }
+        }
+
+        return files.toList()
+    }
+
+    private fun isExcludedPath(file: VirtualFile): Boolean {
+        val normalizedPath = file.path.replace('\\', '/')
+        return EXCLUDED_PATH_SEGMENTS.any { normalizedPath.contains(it) }
+    }
+
+    private fun mightContainRenameTarget(content: String, oldFullKey: String, oldLeaf: String): Boolean {
+        return content.contains(oldFullKey) ||
+            content.contains(oldLeaf) ||
+            content.contains("{$oldFullKey}") ||
+            content.contains("{$oldLeaf}")
+    }
+
     private fun findSeparatorOutsideQuotes(line: String, separator: Char): Int {
         var inSingle = false
         var inDouble = false
@@ -678,11 +733,5 @@ class I18nKeyRenameProcessor : RenamePsiElementProcessor() {
     companion object {
         private val SOURCE_EXTENSIONS = setOf("js", "jsx", "ts", "tsx", "vue", "mjs", "cjs", "java")
         private val EXCLUDED_PATH_SEGMENTS = listOf("/node_modules/", "/dist/", "/build/")
-
-        private fun shouldTraverse(file: VirtualFile): Boolean {
-            if (!file.isDirectory) return true
-            val normalizedPath = file.path.replace('\\', '/')
-            return EXCLUDED_PATH_SEGMENTS.none { normalizedPath.contains(it) } && !file.name.startsWith(".")
-        }
     }
 }
