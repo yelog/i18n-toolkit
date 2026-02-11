@@ -3,6 +3,20 @@
 # i18n-toolkit Changelog
 
 ## [Unreleased]
+
+### Added
+- Added end-to-end key creation and translation editing support for YAML/TOML locale files
+- Added translation consistency helpers to detect missing locales and batch-create missing entries
+- Added safe i18n key rename support across locale declarations and JS/TS/Vue/Java code usages
+
+### Changed
+- Refactored missing-key quick fix to use shared key-creation support for consistent behavior across file types
+- Improved rename performance by switching to indexed candidate source files with lightweight text pre-filtering
+
+### Fixed
+- Blocked key rename when the target key already exists in overlapping locales to avoid accidental overwrite
+- Ensured text-based translation file writes are explicitly saved so cache refresh reflects new keys/values immediately
+
 ## 0.0.5
 ### Added
 - Java/Spring i18n support for string literal keys, including inline hints, key completion, quick documentation, unresolved-key annotation, and Cmd/Ctrl+Click references
