@@ -18,6 +18,34 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.0.5</h3>
+    <h4>Added</h4>
+    <ul>
+        <li>Java/Spring i18n support for string literal keys, including inline hints, key completion, quick documentation, unresolved-key annotation, and Cmd/Ctrl+Click references</li>
+        <li>Module-aware i18n lookup for multi-module projects, with dependency-module fallback when resolving keys</li>
+        <li>Detection of Spring message bundles in <code>src/main/resources</code> (e.g. <code>messages.properties</code>, <code>messages_zh_CN.properties</code>)</li>
+    </ul>
+    <h4>Fixed</h4>
+    <ul>
+        <li>Java <code>LangUtil.get(...)</code> i18n key completion now auto-popups reliably while typing and no longer loses candidates when completion runs on copied PSI files</li>
+        <li>Spring <code>.properties</code> translation keys now participate in plugin Find Usages / reference search for Java i18n calls, resolving false "unused key" gray states</li>
+        <li>Custom i18n function parsing now accepts Chinese separators (<code>，</code> / <code>；</code>) in settings and resolves qualified method names case-insensitively (e.g. <code>LangUtil.get</code> vs <code>langUtil.get</code>)</li>
+        <li>Fixed a <code>StringIndexOutOfBoundsException</code> in properties key fallback parsing during usage highlighting when caret/element offset lands on a newline boundary</li>
+    </ul>
+    <h4>Changed</h4>
+    <ul>
+        <li>Extended cache snapshot/index structures with per-module translation data to support module-scoped key visibility and resolution</li>
+        <li>Added Spring filename locale extraction (<code>messages_xx[_YY]</code>) and integrated it into translation file path parsing</li>
+        <li>Enabled optional Java plugin dependency registration via <code>i18n-java.xml</code> and included <code>com.intellij.java</code> in bundled plugin configuration</li>
+        <li>Set Kotlin <code>jvmDefault</code> to <code>NO_COMPATIBILITY</code> to avoid synthetic deprecated bridge methods on interface default APIs</li>
+    </ul>
+    <h4>Compatibility</h4>
+    <ul>
+        <li>Replaced deprecated API paths reported by IntelliJ 2026.1 EAP: removed <code>CompletionContributor.invokeAutoPopup(...)</code> override, removed <code>DynamicPluginListener.checkUnloadPlugin(...)</code> override, removed explicit <code>StatusBarWidget.getPresentation(PlatformType)</code> implementation, and migrated daemon refresh to a non-deprecated restart path with runtime compatibility fallback</li>
+    </ul>
+
+    <h3>0.0.4</h3>
+    <h4>Fixed</h4>
     <h3>0.0.4</h3>
     <h4>Fixed</h4>
     <ul>
