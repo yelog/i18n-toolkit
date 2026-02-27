@@ -1,5 +1,7 @@
 package com.github.yelog.i18ntoolkit.reference
 
+import com.github.yelog.i18ntoolkit.I18nConstants
+
 import com.github.yelog.i18ntoolkit.model.TranslationEntry
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.util.I18nNamespaceResolver
@@ -232,6 +234,6 @@ class I18nNavigationElement(
         val lineStart = document.getLineStartOffset(lineNumber)
         val lineEnd = document.getLineEndOffset(lineNumber)
         val lineText = document.getText(TextRange(lineStart, lineEnd)).trim()
-        return if (lineText.length > 60) lineText.take(57) + "..." else lineText
+        return if (lineText.length > I18nConstants.Display.LINE_CONTENT_MAX_LENGTH) lineText.take(I18nConstants.Display.LINE_CONTENT_MAX_LENGTH - I18nConstants.Display.TRUNCATION_SUFFIX.length) + I18nConstants.Display.TRUNCATION_SUFFIX else lineText
     }
 }

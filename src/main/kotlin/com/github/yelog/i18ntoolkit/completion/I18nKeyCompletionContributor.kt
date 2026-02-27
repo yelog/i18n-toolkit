@@ -1,5 +1,7 @@
 package com.github.yelog.i18ntoolkit.completion
 
+import com.github.yelog.i18ntoolkit.I18nConstants
+
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
 import com.github.yelog.i18ntoolkit.util.I18nFunctionResolver
@@ -47,7 +49,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         var current = position
         var literalExpression: JSLiteralExpression? = null
         var depth = 0
-        while (current.parent != null && depth < 5) {
+        while (current.parent != null && depth < I18nConstants.PsiTraversal.MAX_LITERAL_SEARCH_DEPTH) {
             logger.debug("Checking depth $depth: ${current.javaClass.simpleName}")
             if (current is JSLiteralExpression) {
                 literalExpression = current
@@ -190,7 +192,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         var addedCount = 0
         for ((key, _) in rankedKeys) {
             val translationValue = typeTexts[key]
-            val translationDisplay = translationValue?.take(50) ?: ""
+            val translationDisplay = translationValue?.take(I18nConstants.Display.TRANSLATION_PREVIEW_MAX_LENGTH) ?: ""
 
             // Determine the key to show (remove namespace prefix if applicable)
             val displayKey = if (namespace != null && key.startsWith("$namespace.")) {
@@ -287,7 +289,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
     ): List<Pair<String, Int>> {
         if (input.isBlank()) {
             // If no input, show all keys sorted alphabetically with base score
-            return keys.map { it to 1 }.sortedBy { it.first }
+            return keys.map { it to I18nConstants.CompletionWeights.BASE_SCORE }.sortedBy { it.first }
         }
 
         val inputLower = input.lowercase()
@@ -324,7 +326,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
     ): Int {
         val keyLower = key.lowercase()
         // Base score ensures all keys are included
-        var score = 1
+        var score = I18nConstants.CompletionWeights.BASE_SCORE
 
         // Remove namespace prefix for matching
         val keyForMatching = if (namespace != null && keyLower.startsWith("$namespace.")) {
@@ -335,20 +337,20 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
         // Exact match (highest priority)
         if (keyForMatching == inputLower) {
-            score += 10000
+            score += I18nConstants.CompletionWeights.EXACT_MATCH
         }
 
         // Starts with input (very high priority)
         if (keyForMatching.startsWith(inputLower)) {
-            score += 5000
+            score += I18nConstants.CompletionWeights.PREFIX_MATCH
         }
 
         // Contains input as substring
         if (keyForMatching.contains(inputLower)) {
-            score += 2000
+            score += I18nConstants.CompletionWeights.SUBSTRING_MATCH
             // Bonus for early position
             val position = keyForMatching.indexOf(inputLower)
-            score += (100 - position).coerceAtLeast(0)
+            score += (I18nConstants.CompletionWeights.POSITION_BONUS_MAX - position).coerceAtLeast(0)
         }
 
         // Fuzzy match: all input words appear in key
@@ -358,7 +360,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         }
 
         if (allWordsMatch) {
-            score += 1000
+            score += I18nConstants.CompletionWeights.ALL_WORDS_MATCH
             // Bonus if words are in the same order
             var lastIndex = -1
             var inOrder = true
@@ -371,7 +373,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                 lastIndex = index
             }
             if (inOrder) {
-                score += 500
+                score += I18nConstants.CompletionWeights.WORDS_IN_ORDER
             }
 
             // Extra bonus if key starts with the first input word
@@ -379,9 +381,9 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                 val firstInputWord = inputKeyWords.first()
                 val firstKeyWord = keyWords.first()
                 if (firstKeyWord.startsWith(firstInputWord)) {
-                    score += 3000  // Strong bonus for matching the first segment
+                    score += I18nConstants.CompletionWeights.FIRST_SEGMENT_MATCH
                 } else if (firstKeyWord.contains(firstInputWord)) {
-                    score += 1000  // Moderate bonus if first key word contains the input
+                    score += I18nConstants.CompletionWeights.FIRST_SEGMENT_CONTAINS
                 }
             }
         }
@@ -390,17 +392,17 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         if (inputLower.length >= 2) {
             val acronym = keyWords.mapNotNull { it.firstOrNull() }.joinToString("")
             if (acronym.contains(inputLower)) {
-                score += 300
+                score += I18nConstants.CompletionWeights.ACRONYM_MATCH
             }
         }
 
         // Bonus for shorter keys (prefer specific over general)
-        val lengthBonus = (200 - keyForMatching.length).coerceAtLeast(0)
+        val lengthBonus = (I18nConstants.CompletionWeights.MAX_LENGTH_BONUS - keyForMatching.length).coerceAtLeast(0)
         score += lengthBonus
 
         // Bonus if in the current namespace
         if (namespace != null && key.startsWith("$namespace.")) {
-            score += 1500
+            score += I18nConstants.CompletionWeights.NAMESPACE_MATCH
         }
 
         // Add translation match score for display locale (if available)
@@ -422,17 +424,17 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         var score = 0
 
         if (translationLower == inputLower) {
-            score += 6000
+            score += I18nConstants.CompletionWeights.TRANSLATION_EXACT_MATCH
         }
 
         if (translationLower.startsWith(inputLower)) {
-            score += 3000
+            score += I18nConstants.CompletionWeights.TRANSLATION_PREFIX_MATCH
         }
 
         if (translationLower.contains(inputLower)) {
-            score += 1500
+            score += I18nConstants.CompletionWeights.TRANSLATION_SUBSTRING_MATCH
             val position = translationLower.indexOf(inputLower)
-            score += (80 - position).coerceAtLeast(0)
+            score += (I18nConstants.CompletionWeights.TRANSLATION_POSITION_BONUS_MAX - position).coerceAtLeast(0)
         }
 
         if (inputWords.isNotEmpty()) {
@@ -443,7 +445,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                 translationWords.any { it.contains(inputWord) } || translationLower.contains(inputWord)
             }
             if (allWordsMatch) {
-                score += 800
+                score += I18nConstants.CompletionWeights.TRANSLATION_WORDS_MATCH
             }
         }
 

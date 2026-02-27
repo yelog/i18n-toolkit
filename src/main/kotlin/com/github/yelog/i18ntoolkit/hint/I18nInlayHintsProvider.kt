@@ -1,5 +1,7 @@
 package com.github.yelog.i18ntoolkit.hint
 
+import com.github.yelog.i18ntoolkit.I18nConstants
+
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nDisplayMode
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
@@ -33,7 +35,7 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
         // Global cache to track processed hints across language instances
         // Key: "filePath:modStamp:offset" - includes modification stamp for automatic invalidation
         private val globalProcessedHints = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
-        private const val MAX_CACHE_SIZE = 10000
+        private const val MAX_CACHE_SIZE = I18nConstants.Cache.MAX_HINTS_CACHE_SIZE
 
         fun clearCache() {
             // Increment version to invalidate any cached state
@@ -199,7 +201,7 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
                     ?: cacheService.getTranslationStrict(partialKey, locale)
 
                 if (translation != null) {
-                    truncateText(translation.value, 50)
+                    truncateText(translation.value, I18nConstants.Display.TRANSLATION_PREVIEW_MAX_LENGTH)
                 } else {
                     // Check if the key exists in any locale
                     val hasAnyTranslation = cacheService.getAllTranslations(fullKey).isNotEmpty()
@@ -215,7 +217,7 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
                 val translation = cacheService.getTranslation(fullKey, null)
                     ?: cacheService.getTranslation(partialKey, null)
                     ?: return
-                truncateText(translation.value, 50)
+                truncateText(translation.value, I18nConstants.Display.TRANSLATION_PREVIEW_MAX_LENGTH)
             }
 
             val presentation = createPresentation(factory, translationText)
@@ -243,9 +245,9 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
             return factory.roundWithBackground(textPresentation)
         }
 
-        private fun truncateText(text: String, maxLength: Int): String {
+        private fun truncateText(text: String, maxLength: Int = I18nConstants.Display.TRANSLATION_PREVIEW_MAX_LENGTH): String {
             return if (text.length > maxLength) {
-                text.take(maxLength - 3) + "..."
+                text.take(maxLength - I18nConstants.Display.TRUNCATION_SUFFIX.length) + I18nConstants.Display.TRUNCATION_SUFFIX
             } else {
                 text
             }
