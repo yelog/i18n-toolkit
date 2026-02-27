@@ -46,13 +46,13 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             // Get the actual property element
             val propertyElement = getPropertyElement(element)
             if (propertyElement == null) {
-                thisLogger().info("I18n Toolkit: canFindUsages=false, element type: ${element.javaClass.simpleName}")
+                thisLogger().debug("I18n Toolkit: canFindUsages=false, element type: ${element.javaClass.simpleName}")
                 return@compute false
             }
 
             val canHandle = isInTranslationFile(propertyElement)
             if (canHandle) {
-                thisLogger().info("I18n Toolkit: canFindUsages=true for property: ${propertyElement.text}")
+                thisLogger().debug("I18n Toolkit: canFindUsages=true for property: ${propertyElement.text}")
             }
 
             canHandle
@@ -78,7 +78,7 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
                 return@compute null
             }
 
-            thisLogger().info("I18n Toolkit: Creating handler for key: $key")
+            thisLogger().debug("I18n Toolkit: Creating handler for key: $key")
             I18nFindUsagesHandler(propertyElement, key)
         }
     }
@@ -146,7 +146,7 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
         }
 
         if (fullKey != null) {
-            thisLogger().info("I18n Toolkit: Extracted key: $fullKey from ${file.name}")
+            thisLogger().debug("I18n Toolkit: Extracted key: $fullKey from ${file.name}")
         }
 
         return fullKey
@@ -302,9 +302,9 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             target: PsiElement,
             searchScope: com.intellij.psi.search.SearchScope
         ): Collection<PsiReference> {
-            thisLogger().info("I18n Toolkit: findReferencesToHighlight called for key: $fullKey")
+            thisLogger().debug("I18n Toolkit: findReferencesToHighlight called for key: $fullKey")
             val references = findUsagesInScope(searchScope).mapNotNull { it.reference }
-            thisLogger().info("I18n Toolkit: Found ${references.size} references")
+            thisLogger().debug("I18n Toolkit: Found ${references.size} references")
             return references
         }
 
@@ -313,9 +313,9 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             processor: Processor<in UsageInfo>,
             options: com.intellij.find.findUsages.FindUsagesOptions
         ): Boolean {
-            thisLogger().info("I18n Toolkit: processElementUsages called for key: $fullKey")
+            thisLogger().debug("I18n Toolkit: processElementUsages called for key: $fullKey")
             val usages = findUsagesInScope(options.searchScope)
-            thisLogger().info("I18n Toolkit: Found ${usages.size} usages")
+            thisLogger().debug("I18n Toolkit: Found ${usages.size} usages")
 
             for (usage in usages) {
                 if (!processor.process(usage)) {
@@ -330,9 +330,9 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
             val project = psiElement.project
             val candidateFiles = collectCandidateFiles(project, searchScope)
 
-            thisLogger().info("I18n Toolkit: Searching for key '$fullKey' in scope: $searchScope")
+            thisLogger().debug("I18n Toolkit: Searching for key '$fullKey' in scope: $searchScope")
 
-            thisLogger().info("I18n Toolkit: Found ${candidateFiles.size} candidate files")
+            thisLogger().debug("I18n Toolkit: Found ${candidateFiles.size} candidate files")
 
             val psiManager = PsiManager.getInstance(project)
             var processedCount = 0
@@ -346,8 +346,8 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
                 }
             }
 
-            thisLogger().info("I18n Toolkit: Processed $processedCount files in scope")
-            thisLogger().info("I18n Toolkit: Total usages found: ${usages.size}")
+            thisLogger().debug("I18n Toolkit: Processed $processedCount files in scope")
+            thisLogger().debug("I18n Toolkit: Total usages found: ${usages.size}")
             return usages
         }
 
@@ -394,7 +394,7 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
                     (fullKey.contains('.') && fullKey.endsWith(".$partialKey"))
 
             if (isMatch) {
-                thisLogger().info("I18n Toolkit: Match found - partial: $partialKey, resolved: $resolvedFullKey, searching: $fullKey")
+                thisLogger().debug("I18n Toolkit: Match found - partial: $partialKey, resolved: $resolvedFullKey, searching: $fullKey")
                 // Create a custom reference for this usage
                 val relativeRange = TextRange(1, partialKey.length + 1)
                 val reference = I18nKeyReference(firstArg, relativeRange, resolvedFullKey, partialKey)
@@ -417,8 +417,8 @@ class I18nFindUsagesHandlerFactory : FindUsagesHandlerFactory() {
                     (fullKey.contains('.') && fullKey.endsWith(".$partialKey"))
             if (!isMatch) return
 
-            thisLogger().info(
-                "I18n Toolkit: Java match found - partial: $partialKey, resolved: $resolvedFullKey, searching: $fullKey"
+                thisLogger().debug(
+                    "I18n Toolkit: Java match found - partial: $partialKey, resolved: $resolvedFullKey, searching: $fullKey"
             )
 
             val relativeRange = if (match.matchType == SpringMessagePatternMatcher.MatchType.VALIDATION_ANNOTATION) {

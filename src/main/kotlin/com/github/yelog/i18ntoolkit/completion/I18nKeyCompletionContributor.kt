@@ -21,9 +21,9 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
         val logger = thisLogger()
-        logger.info("=== I18n fillCompletionVariants called ===")
-        logger.info("Completion type: ${parameters.completionType}")
-        logger.info("Position: ${parameters.position.javaClass.simpleName}, text: '${parameters.position.text}'")
+        logger.debug("=== I18n fillCompletionVariants called ===")
+        logger.debug("Completion type: ${parameters.completionType}")
+        logger.debug("Position: ${parameters.position.javaClass.simpleName}, text: '${parameters.position.text}'")
 
         // Process i18n completion
         processI18nCompletion(parameters, result)
@@ -37,21 +37,21 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         val project = position.project
 
         val logger = thisLogger()
-        logger.info("I18n completion triggered")
-        logger.info("Position element: ${position.javaClass.simpleName}, text: '${position.text}'")
-        logger.info("Position parent: ${position.parent?.javaClass?.simpleName}")
-        logger.info("Position parent.parent: ${position.parent?.parent?.javaClass?.simpleName}")
-        logger.info("Position parent.parent.parent: ${position.parent?.parent?.parent?.javaClass?.simpleName}")
+        logger.debug("I18n completion triggered")
+        logger.debug("Position element: ${position.javaClass.simpleName}, text: '${position.text}'")
+        logger.debug("Position parent: ${position.parent?.javaClass?.simpleName}")
+        logger.debug("Position parent.parent: ${position.parent?.parent?.javaClass?.simpleName}")
+        logger.debug("Position parent.parent.parent: ${position.parent?.parent?.parent?.javaClass?.simpleName}")
 
         // Find the JSLiteralExpression by traversing up the tree
         var current = position
         var literalExpression: JSLiteralExpression? = null
         var depth = 0
         while (current.parent != null && depth < 5) {
-            logger.info("Checking depth $depth: ${current.javaClass.simpleName}")
+            logger.debug("Checking depth $depth: ${current.javaClass.simpleName}")
             if (current is JSLiteralExpression) {
                 literalExpression = current
-                logger.info("Found JSLiteralExpression at depth $depth")
+                logger.debug("Found JSLiteralExpression at depth $depth")
                 break
             }
             current = current.parent
@@ -62,7 +62,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             // Try position.parent directly
             literalExpression = position.parent as? JSLiteralExpression
             if (literalExpression == null) {
-                logger.info("Not inside JSLiteralExpression after traversing up to depth $depth, returning")
+                logger.debug("Not inside JSLiteralExpression after traversing up to depth $depth, returning")
                 return
             }
         }
@@ -73,42 +73,42 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
         // Try literalExpression.parent first (might be JSArgumentList)
         val parent = literalExpression.parent
-        logger.info("Literal parent: ${parent?.javaClass?.simpleName}")
+        logger.debug("Literal parent: ${parent?.javaClass?.simpleName}")
 
         if (parent is JSCallExpression) {
             callExpression = parent
         } else if (parent != null) {
             // Try parent.parent (for JSArgumentList case)
-            logger.info("Literal parent.parent: ${parent.parent?.javaClass?.simpleName}")
+            logger.debug("Literal parent.parent: ${parent.parent?.javaClass?.simpleName}")
             callExpression = parent.parent as? JSCallExpression
         }
 
         if (callExpression == null) {
-            logger.info("Could not find JSCallExpression, returning")
+            logger.debug("Could not find JSCallExpression, returning")
             return
         }
 
-        logger.info("Found JSCallExpression")
+        logger.debug("Found JSCallExpression")
 
         val methodExpr = callExpression.methodExpression as? JSReferenceExpression
         if (methodExpr == null) {
-            logger.info("Method expression is not JSReferenceExpression, returning")
+            logger.debug("Method expression is not JSReferenceExpression, returning")
             return
         }
 
         val methodName = methodExpr.referenceName
         if (methodName == null) {
-            logger.info("Method name is null, returning")
+            logger.debug("Method name is null, returning")
             return
         }
 
-        logger.info("Method name: $methodName")
+        logger.debug("Method name: $methodName")
 
         // Check if this is an i18n function
         val i18nFunctions = I18nFunctionResolver.getFunctions(project)
-        logger.info("Configured i18n functions: $i18nFunctions")
+        logger.debug("Configured i18n functions: $i18nFunctions")
         if (!i18nFunctions.contains(methodName)) {
-            logger.info("Method '$methodName' is not an i18n function, returning")
+            logger.debug("Method '$methodName' is not an i18n function, returning")
             return
         }
 
@@ -124,16 +124,16 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         val currentText = stringContent.substring(0, cursorOffsetInContent)
         val currentTextLower = currentText.lowercase()
 
-        logger.info("Current input text: '$currentText', full string: '$stringContent'")
+        logger.debug("Current input text: '$currentText', full string: '$stringContent'")
 
         // Get all available keys
         val cacheService = I18nCacheService.getInstance(project)
         cacheService.initialize()
         val allKeys = cacheService.getAllKeys()
-        logger.info("Total available keys: ${allKeys.size}")
+        logger.debug("Total available keys: ${allKeys.size}")
 
         if (allKeys.isEmpty()) {
-            logger.info("No keys available in cache, returning")
+            logger.debug("No keys available in cache, returning")
             return
         }
 
@@ -168,7 +168,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             allKeys.toList(),
             namespace
         ) { key -> displayTranslations[key] }
-        logger.info("Ranked keys count: ${rankedKeys.size}")
+        logger.debug("Ranked keys count: ${rankedKeys.size}")
 
         // Use a custom prefix matcher that accepts all keys (we do our own fuzzy filtering)
         // IMPORTANT: Use the original prefix from result to maintain correct popup position
@@ -271,7 +271,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             sortedResult.addElement(lookupElement)
             addedCount++
         }
-        logger.info("Successfully added $addedCount completion items")
+        logger.debug("Successfully added $addedCount completion items")
     }
 
     /**

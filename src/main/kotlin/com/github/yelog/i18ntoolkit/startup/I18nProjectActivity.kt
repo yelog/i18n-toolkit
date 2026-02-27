@@ -14,7 +14,7 @@ import com.intellij.openapi.startup.ProjectActivity
 class I18nProjectActivity : ProjectActivity {
 
     override suspend fun execute(project: Project) {
-        thisLogger().info("I18n Toolkit: Initializing for project ${project.name}")
+        thisLogger().debug("I18n Toolkit: Initializing for project ${project.name}")
         I18nCacheService.getInstance(project).initialize()
         installQuickDocOverride()
     }
@@ -53,7 +53,7 @@ class I18nDynamicPluginListener : DynamicPluginListener {
 
     override fun pluginLoaded(pluginDescriptor: IdeaPluginDescriptor) {
         if (pluginDescriptor.pluginId.idString == "com.github.yelog.i18ntoolkit") {
-            thisLogger().info("I18n Toolkit: Plugin dynamically loaded, initializing...")
+            thisLogger().debug("I18n Toolkit: Plugin dynamically loaded, initializing...")
             // Initialize cache for all open projects
             ProjectManager.getInstance().openProjects.forEach { project ->
                 if (!project.isDisposed) {

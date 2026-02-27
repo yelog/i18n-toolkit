@@ -45,7 +45,7 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
 
             override fun getClickConsumer(): Consumer<MouseEvent> {
                 return Consumer { event ->
-                    thisLogger().info("I18n status bar widget clicked")
+                    thisLogger().debug("I18n status bar widget clicked")
                     showPopup(event.component)
                 }
             }
@@ -55,7 +55,7 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
     }
 
     override fun install(statusBar: StatusBar) {
-        thisLogger().info("I18n status bar widget installed")
+        thisLogger().debug("I18n status bar widget installed")
     }
 
     override fun dispose() {
@@ -91,7 +91,7 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
             return null
         }
 
-        thisLogger().info("Creating popup with ${locales.size} locales: $locales")
+        thisLogger().debug("Creating popup with ${locales.size} locales: $locales")
 
         val currentLocale = resolveCurrentLocale(settings, locales)
 
@@ -112,7 +112,7 @@ class I18nStatusBarWidget(private val project: Project) : StatusBarWidget {
                         if (selectedValue.locale != currentLocale) {
                             ApplicationManager.getApplication().invokeLater {
                                 settings.state.displayLocale = selectedValue.locale
-                                thisLogger().info("Changed display locale to: ${selectedValue.locale}")
+                                thisLogger().debug("Changed display locale to: ${selectedValue.locale}")
                                 I18nUiRefresher.refresh(project)
                             }
                         }
