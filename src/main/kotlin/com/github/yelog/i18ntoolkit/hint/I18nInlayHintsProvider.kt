@@ -1,7 +1,6 @@
 package com.github.yelog.i18ntoolkit.hint
 
 import com.github.yelog.i18ntoolkit.I18nConstants
-
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.github.yelog.i18ntoolkit.settings.I18nDisplayMode
 import com.github.yelog.i18ntoolkit.settings.I18nSettingsState
@@ -14,6 +13,7 @@ import com.intellij.lang.injection.InjectedLanguageManager
 import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileTypes.FileType
@@ -24,7 +24,6 @@ import com.intellij.psi.PsiFileFactory
 import com.intellij.psi.util.PsiTreeUtil
 import javax.swing.JComponent
 import javax.swing.JPanel
-
 @Suppress("UnstableApiUsage")
 class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
 
@@ -145,7 +144,8 @@ class I18nInlayHintsProvider : InlayHintsProvider<NoSettings> {
                                 processI18nCall(call, editor, sink)
                             }
                         }
-                    } catch (_: Exception) {
+                    } catch (e: Exception) {
+                        thisLogger().debug("I18n Toolkit: Ignoring injection processing error", e)
                         // Ignore elements that don't support injection
                     }
 

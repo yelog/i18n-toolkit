@@ -10,6 +10,7 @@ import com.intellij.json.psi.JsonProperty
 import com.intellij.json.psi.JsonStringLiteral
 import com.intellij.json.psi.JsonValue
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
@@ -135,7 +136,8 @@ object I18nKeyCreationSupport {
                 val addedProperty = currentObject.findProperty(finalKey)
                 val valueElement = addedProperty?.value
                 valueElement?.textRange?.startOffset
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Key creation operation failed", e)
                 null
             }
         }
@@ -204,7 +206,8 @@ object I18nKeyCreationSupport {
                 FileDocumentManager.getInstance().saveDocument(document)
 
                 bestInsertOffset + newLine.length + key.length + 1
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Key creation operation failed", e)
                 null
             }
         }
@@ -312,7 +315,8 @@ object I18nKeyCreationSupport {
                 } else {
                     replaceStart
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Key creation operation failed", e)
                 null
             }
         }
@@ -339,7 +343,8 @@ object I18nKeyCreationSupport {
                 FileDocumentManager.getInstance().saveDocument(document)
 
                 insertOffset + prefix.length + key.length + 2
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Key creation operation failed", e)
                 null
             }
         }
@@ -366,7 +371,8 @@ object I18nKeyCreationSupport {
                 FileDocumentManager.getInstance().saveDocument(document)
 
                 insertOffset + prefix.length + key.length + 3
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Key creation operation failed", e)
                 null
             }
         }

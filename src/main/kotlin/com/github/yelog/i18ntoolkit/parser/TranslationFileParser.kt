@@ -15,6 +15,7 @@ import com.intellij.lang.javascript.psi.JSObjectLiteralExpression
 import com.intellij.lang.javascript.psi.JSVarStatement
 import com.intellij.lang.javascript.psi.ecmal4.JSAttributeList
 import com.intellij.lang.ecmascript6.psi.ES6ExportDefaultAssignment
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiManager
@@ -96,7 +97,8 @@ object TranslationFileParser {
             val yaml = Yaml()
             val data = yaml.load<Map<String, Any>>(StringReader(content)) ?: return entries
             parseYamlMap(data, keyPrefix, locale, file, entries, 0)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Failed to parse YAML file ${file.path}", e)
         }
         return entries
     }
@@ -249,7 +251,8 @@ object TranslationFileParser {
                 }
                 offset += line.length + 1
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Failed to parse Properties file ${file.path}", e)
         }
         return entries
     }
@@ -334,7 +337,8 @@ object TranslationFileParser {
             val content = String(file.contentsToByteArray(), Charsets.UTF_8)
             val toml = com.moandjiezana.toml.Toml().read(content)
             parseTomlMap(toml.toMap(), keyPrefix, locale, file, entries, 0)
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Failed to parse TOML file ${file.path}", e)
         }
         return entries
     }

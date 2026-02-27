@@ -7,6 +7,7 @@ import com.intellij.json.psi.JsonStringLiteral
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSProperty
 import com.intellij.openapi.command.WriteCommandAction
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDocumentManager
@@ -127,7 +128,9 @@ object I18nTranslationWriter {
             } else {
                 entry.key
             }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Failed to resolve local key for ${entry.file.path}", e)
+            entry.key
             entry.key
         }
     }
