@@ -204,5 +204,11 @@
             <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift I"/>
             <keyboard-shortcut keymap="$default" first-keystroke="control shift I"/>
         </action>
+        <action id="I18nToolkit.GenerateReport"
+                class="com.github.yelog.i18ntoolkit.action.I18nGenerateReportAction"
+                text="Generate i18n Translation Report"
+                description="Generate HTML and CSV reports showing translation coverage statistics">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>
