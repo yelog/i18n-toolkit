@@ -1,0 +1,69 @@
+# Creates a GitHub Release when a version tag (e.g. v0.0.9) is pushed.
+# The release includes:
+#   - The built plugin ZIP as a release asset
+#   - The corresponding changelog section from CHANGELOG.md as release notes
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+
+      - name: Maximize Build Space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+
+      - name: Fetch Sources
+        uses: actions/checkout@v5
+
+      - name: Get version from tag
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 21
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Build plugin
+        run: ./gradlew buildPlugin
+
+      - name: Extract changelog for version
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          mkdir -p build/tmp
+          awk -v ver="## $VERSION" '
+            $0 == ver { found=1; next }
+            found && /^## /  { exit }
+            found            { print }
+          ' CHANGELOG.md | sed '/^[[:space:]]*$/d' > build/tmp/release_notes.md
+          echo "--- release notes ---"
+          cat build/tmp/release_notes.md
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --notes-file build/tmp/release_notes.md \
+            ./build/distributions/*.zip
