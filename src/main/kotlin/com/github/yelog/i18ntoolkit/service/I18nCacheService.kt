@@ -229,6 +229,179 @@ class I18nCacheService(private val project: Project) : Disposable {
         }
     }
 
+    /**
+     * Incrementally update cache for a specific file.
+     * Only updates entries related to this file, keeping other cache data intact.
+     * Much faster than full refresh for large projects.
+     */
+    fun invalidateFileIncremental(file: VirtualFile) {
+        if (!I18nDirectoryScanner.isTranslationFile(file)) return
+
+        val basePath = project.basePath ?: return
+
+        // Use non-blocking read action for file parsing
+        ReadAction.nonBlocking<Unit> {
+            doIncrementalUpdate(file, basePath)
+        }
+            .expireWith(this)
+            .submit(AppExecutorUtil.getAppExecutorService())
+    }
+
+    private fun doIncrementalUpdate(file: VirtualFile, basePath: String) {
+        if (project.isDisposed) return
+
+        try {
+            val currentSnapshot = cacheSnapshot.get()
+            val framework = currentSnapshot.translationData.framework
+
+            // Determine locale and key prefix for this file
+            val springLocale = I18nLocaleUtils.extractLocaleFromSpringFilename(file.nameWithoutExtension)
+            val isSpringMessageLikeProperties = file.extension.equals("properties", ignoreCase = true) &&
+                    file.nameWithoutExtension.startsWith("messages", ignoreCase = true)
+
+            // Skip Spring base properties files
+            if (framework == I18nFramework.SPRING_MESSAGE &&
+                isSpringMessageLikeProperties &&
+                springLocale == null
+            ) {
+                return
+            }
+
+            val pathInfo = if (springLocale != null) {
+                I18nKeyGenerator.PathInfo(
+                    locale = springLocale,
+                    module = null,
+                    businessUnit = null,
+                    keyPrefix = ""
+                )
+            } else {
+                I18nKeyGenerator.parseFilePath(file, basePath)
+            }
+
+            val translationFile = TranslationFile(
+                file = file,
+                locale = pathInfo.locale,
+                module = pathInfo.module,
+                businessUnit = pathInfo.businessUnit,
+                keyPrefix = pathInfo.keyPrefix
+            )
+
+            // Parse the updated file
+            val entries = TranslationFileParser.parse(
+                project,
+                file,
+                pathInfo.keyPrefix,
+                pathInfo.locale
+            )
+
+            if (entries.isEmpty() && !currentSnapshot.translationData.files.any { it.file == file }) {
+                // File has no entries and wasn't in cache before, nothing to do
+                return
+            }
+
+            // Build new cache snapshot with incremental update
+            val newSnapshot = buildIncrementalSnapshot(currentSnapshot, translationFile, entries, framework)
+
+            // CAS update
+            if (cacheSnapshot.compareAndSet(currentSnapshot, newSnapshot)) {
+                thisLogger().debug("I18n Toolkit: Incremental cache update completed for ${file.name}")
+                // Trigger UI refresh on EDT
+                I18nUiRefresher.refresh(project)
+            } else {
+                // Another thread updated the cache, fall back to full refresh
+                thisLogger().debug("I18n Toolkit: CAS failed for incremental update, falling back to full refresh")
+                refresh()
+            }
+        } catch (e: Exception) {
+            thisLogger().warn("I18n Toolkit: Incremental cache update failed for ${file.path}, falling back to full refresh", e)
+            refresh()
+        }
+    }
+
+    private fun buildIncrementalSnapshot(
+        currentSnapshot: CacheSnapshot,
+        updatedFile: TranslationFile,
+        newEntries: Map<String, TranslationEntry>,
+        framework: I18nFramework
+    ): CacheSnapshot {
+        // Create new mutable data structures based on current snapshot
+        val newTranslations = currentSnapshot.translationData.translations.mapValues { (_, localeMap) ->
+            localeMap.toMutableMap()
+        }.toMutableMap()
+
+        val newKeyToEntries = currentSnapshot.keyToEntries.mapValues { (_, entries) ->
+            entries.toMutableSet()
+        }.toMutableMap()
+
+        val newFiles = currentSnapshot.translationData.files.filter { it.file != updatedFile.file }.toMutableList()
+        val newModuleTranslations = currentSnapshot.moduleTranslations.mapValues { (_, data) ->
+            TranslationData(
+                framework = data.framework,
+                files = data.files.filter { it.file != updatedFile.file }.toMutableList(),
+                translations = data.translations.mapValues { (_, localeMap) ->
+                    localeMap.toMutableMap()
+                }.toMutableMap()
+            )
+        }.toMutableMap()
+
+        // Remove old entries for this file
+        val oldFile = currentSnapshot.translationData.files.find { it.file == updatedFile.file }
+        if (oldFile != null) {
+            oldFile.entries.forEach { (key, entry) ->
+                newTranslations[key]?.remove(entry.locale)
+                if (newTranslations[key]?.isEmpty() == true) {
+                    newTranslations.remove(key)
+                }
+                newKeyToEntries[key]?.remove(entry)
+                if (newKeyToEntries[key]?.isEmpty() == true) {
+                    newKeyToEntries.remove(key)
+                }
+            }
+        }
+
+        // Add new entries
+        val moduleName = I18nModuleResolver.getModuleName(project, updatedFile.file)
+        val newTranslationFile = TranslationFile(
+            file = updatedFile.file,
+            locale = updatedFile.locale,
+            module = updatedFile.module,
+            businessUnit = updatedFile.businessUnit,
+            keyPrefix = updatedFile.keyPrefix
+        )
+
+        newEntries.forEach { (key, entry) ->
+            val entryWithModule = if (moduleName != null) entry.copy(moduleName = moduleName) else entry
+            newTranslationFile.entries[key] = entryWithModule
+
+            newTranslations.getOrPut(key) { mutableMapOf() }[entry.locale] = entryWithModule
+            newKeyToEntries.getOrPut(key) { mutableSetOf() }.add(entryWithModule)
+
+            // Update module-specific data
+            if (moduleName != null) {
+                val moduleData = newModuleTranslations.getOrPut(moduleName) {
+                    TranslationData(framework)
+                }
+                moduleData.addEntry(entryWithModule)
+            }
+        }
+
+        newFiles.add(newTranslationFile)
+        if (moduleName != null) {
+            newModuleTranslations[moduleName]?.files?.add(newTranslationFile)
+        }
+
+        // Create immutable copies
+        val immutableKeyIndex = newKeyToEntries.mapValues { (_, entries) -> entries.toSet() }
+        val immutableModuleTranslations = newModuleTranslations.toMap()
+        val newTranslationData = TranslationData(
+            framework = framework,
+            files = newFiles,
+            translations = newTranslations
+        )
+
+        return CacheSnapshot(newTranslationData, immutableKeyIndex, immutableModuleTranslations)
+    }
+
     fun getOtherLocaleFiles(file: VirtualFile, key: String): List<TranslationEntry> {
         val currentLocale = getTranslationFile(file)?.locale
         return getAllTranslations(key)
