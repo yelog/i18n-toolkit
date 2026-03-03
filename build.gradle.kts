@@ -39,7 +39,7 @@ dependencies {
     testImplementation(libs.opentest4j)
     
     // YAML parsing
-    implementation("org.yaml:snakeyaml:2.2")
+    implementation("org.yaml:snakeyaml:2.6")
     // TOML parsing
     implementation("com.moandjiezana.toml:toml4j:0.7.2")
 
