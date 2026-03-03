@@ -50,12 +50,14 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
                 val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
                 if (!I18nDirectoryScanner.isTranslationFile(file)) return
 
-                // Debounce: reset timer on each change, fire after 500ms of inactivity
+                // Cancel previous timer and schedule new one
                 debounceTimer.get()?.stop()
                 val timer = Timer(500) {
                     if (!project.isDisposed) {
-                        I18nCacheService.getInstance(project).refresh()
-                        I18nUiRefresher.refresh(project)
+                        // Use incremental update for cache (immediate, lightweight)
+                        I18nCacheService.getInstance(project).invalidateFileIncremental(file)
+                        // Use delayed refresh for UI (background silent, avoids flickering)
+                        I18nUiRefresher.refreshDelayed(project, file)
                     }
                 }
                 timer.isRepeats = false
