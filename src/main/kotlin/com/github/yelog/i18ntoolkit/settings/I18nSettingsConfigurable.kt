@@ -2,11 +2,13 @@ package com.github.yelog.i18ntoolkit.settings
 
 import javax.swing.JComponent
 import javax.swing.JLabel
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.keymap.KeymapManager
 import com.intellij.openapi.keymap.KeymapUtil
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.TextFieldWithBrowseButton
 import com.intellij.ui.CollectionComboBoxModel
 import com.intellij.ui.SimpleListCellRenderer
 import com.intellij.ui.JBColor
@@ -14,8 +16,15 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.dsl.builder.*
 import com.intellij.util.ui.JBUI
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.service.I18nTranslationReporter
 import com.github.yelog.i18ntoolkit.util.I18nLocaleUtils
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.notification.Notification
+import com.intellij.notification.NotificationType
+import com.intellij.notification.Notifications
+import java.io.File
 
 class I18nSettingsConfigurable(private val project: Project) : Configurable {
 
@@ -30,6 +39,7 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
 
     private var panel: com.intellij.openapi.ui.DialogPanel? = null
     private var detectedFrameworkLabel: JLabel? = null
+    private var outputDirField: TextFieldWithBrowseButton? = null
 
     override fun getDisplayName(): String = "I18n Toolkit"
 
@@ -91,6 +101,31 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
                     }
                 }
             }
+
+            group("Reports") {
+                row("Output directory") {
+                    val browseField = TextFieldWithBrowseButton().apply {
+                        // 使用相对路径作为默认值
+                        text = "i18n-reports"
+                        addBrowseFolderListener(
+                            "Select Output Directory",
+                            "Choose where to save the i18n reports (HTML and CSV)",
+                            project,
+                            FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                        )
+                    }
+                    outputDirField = browseField
+                    cell(browseField)
+                        .align(AlignX.FILL)
+                        .comment("Directory where HTML and CSV reports will be saved (relative to project root)")
+                }
+                row {
+                    button("Generate Report") {
+                        val outputDir = outputDirField?.text ?: ""
+                        generateReport(outputDir)
+                    }
+                }
+            }
         }
 
         this.panel = panel
@@ -123,6 +158,7 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
     override fun disposeUIResources() {
         panel = null
         detectedFrameworkLabel = null
+        outputDirField = null
     }
 
     private fun refreshLocales() {
@@ -168,6 +204,75 @@ class I18nSettingsConfigurable(private val project: Project) : Configurable {
             foreground = JBColor.namedColor(
                 "Badge.foreground",
                 JBColor(0x222222, 0xEEEEEE)
+            )
+        }
+    }
+
+    private fun generateReport(outputDir: String) {
+        if (outputDir.isBlank()) {
+            Notifications.Bus.notify(
+                Notification(
+                    "I18n Toolkit",
+                    "Invalid Directory",
+                    "Please select a valid output directory",
+                    NotificationType.WARNING
+                ),
+                project
+            )
+            return
+        }
+
+        thisLogger().info("I18n Toolkit: Generating translation reports to $outputDir...")
+
+        val config = I18nTranslationReporter.ReportConfig(
+            outputDir = outputDir,
+            includeMissingDetails = true,
+            includeOrphanedKeys = true
+        )
+
+        val htmlReport = I18nTranslationReporter.generateHtmlReport(project, config)
+        val csvReport = I18nTranslationReporter.generateCsvReport(project, config)
+
+        if (htmlReport != null && csvReport != null) {
+            val notification = Notification(
+                "I18n Toolkit",
+                "i18n Report Generated",
+                "Reports saved to: $outputDir",
+                NotificationType.INFORMATION
+            )
+
+            notification.addAction(object : com.intellij.notification.NotificationAction("Open HTML Report") {
+                override fun actionPerformed(e: com.intellij.openapi.actionSystem.AnActionEvent, notification: Notification) {
+                    // Refresh VFS to ensure the file is found
+                    val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+                        .refreshAndFindFileByIoFile(htmlReport)
+                    if (virtualFile != null) {
+                        FileEditorManager.getInstance(project).openFile(virtualFile, true)
+                        notification.expire()
+                    } else {
+                        Notifications.Bus.notify(
+                            Notification(
+                                "I18n Toolkit",
+                                "Cannot Open Report",
+                                "Failed to open HTML report file",
+                                NotificationType.ERROR
+                            ),
+                            project
+                        )
+                    }
+                }
+            })
+
+            Notifications.Bus.notify(notification, project)
+        } else {
+            Notifications.Bus.notify(
+                Notification(
+                    "I18n Toolkit",
+                    "i18n Report Failed",
+                    "No translations found to report. Ensure translation files are properly configured.",
+                    NotificationType.WARNING
+                ),
+                project
             )
         }
     }

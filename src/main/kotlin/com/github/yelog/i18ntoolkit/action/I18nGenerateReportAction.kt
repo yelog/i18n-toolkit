@@ -45,11 +45,23 @@ class I18nGenerateReportAction : AnAction(
             
             notification.addAction(object : com.intellij.notification.NotificationAction("Open HTML Report") {
                 override fun actionPerformed(e: AnActionEvent, notification: Notification) {
-                    FileEditorManager.getInstance(project).openFile(
-                        com.intellij.openapi.vfs.LocalFileSystem.getInstance().findFileByIoFile(htmlReport) ?: return,
-                        true
-                    )
-                    notification.expire()
+                    // Refresh VFS to ensure the file is found
+                    val virtualFile = com.intellij.openapi.vfs.LocalFileSystem.getInstance()
+                        .refreshAndFindFileByIoFile(htmlReport)
+                    if (virtualFile != null) {
+                        FileEditorManager.getInstance(project).openFile(virtualFile, true)
+                        notification.expire()
+                    } else {
+                        Notifications.Bus.notify(
+                            Notification(
+                                "I18n Toolkit",
+                                "Cannot Open Report",
+                                "Failed to open HTML report file",
+                                NotificationType.ERROR
+                            ),
+                            project
+                        )
+                    }
                 }
             })
             

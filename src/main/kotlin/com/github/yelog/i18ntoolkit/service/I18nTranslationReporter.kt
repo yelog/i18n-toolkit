@@ -134,8 +134,7 @@ object I18nTranslationReporter {
             return null
         }
 
-        val projectPath = project.basePath ?: return null
-        val outputDir = File(projectPath, config.outputDir)
+        val outputDir = resolveOutputDir(project, config.outputDir)
         outputDir.mkdirs()
 
         val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(Date())
@@ -143,7 +142,7 @@ object I18nTranslationReporter {
 
         reportFile.writeText(buildHtmlReport(stats, project.name))
         thisLogger().info("I18n Toolkit: HTML report generated at ${reportFile.absolutePath}")
-        
+
         return reportFile
     }
 
@@ -157,8 +156,7 @@ object I18nTranslationReporter {
             return null
         }
 
-        val projectPath = project.basePath ?: return null
-        val outputDir = File(projectPath, config.outputDir)
+        val outputDir = resolveOutputDir(project, config.outputDir)
         outputDir.mkdirs()
 
         val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(Date())
@@ -166,8 +164,22 @@ object I18nTranslationReporter {
 
         reportFile.writeText(buildCsvReport(stats))
         thisLogger().info("I18n Toolkit: CSV report generated at ${reportFile.absolutePath}")
-        
+
         return reportFile
+    }
+
+    /**
+     * Resolve output directory, handling both absolute and relative paths.
+     * If the path is absolute, use it directly. Otherwise, resolve relative to project base path.
+     */
+    private fun resolveOutputDir(project: Project, outputDir: String): File {
+        val dir = File(outputDir)
+        return if (dir.isAbsolute) {
+            dir
+        } else {
+            val projectPath = project.basePath ?: return dir
+            File(projectPath, outputDir)
+        }
     }
 
     private fun buildHtmlReport(stats: TranslationStats, projectName: String): String {
