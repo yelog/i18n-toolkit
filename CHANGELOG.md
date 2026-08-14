@@ -17,6 +17,20 @@
 - Blocked key rename when the target key already exists in overlapping locales to avoid accidental overwrite
 - Ensured text-based translation file writes are explicitly saved so cache refresh reflects new keys/values immediately
 
+## 0.0.6
+### Added
+- Added report generation controls to settings with configurable absolute or project-relative output directories
+- Added i18next inline `ns:key` syntax for key resolution, completion, and navigation
+
+### Changed
+- Replaced full cache rebuilds with incremental file-level invalidation when translation files change
+- Moved cache-driven editor updates to a delayed silent background refresh to reduce flicker while typing
+- Updated the Gradle wrapper, Kotlin, IntelliJ Platform Gradle plugin, Qodana, Kover, and CI action dependencies
+
+### Fixed
+- Resolved keys against configured default i18next namespaces when no explicit namespace is present
+- Refreshed the VFS before opening generated reports and handled file-open failures gracefully
+
 ## 0.0.5
 ### Added
 - Java/Spring i18n support for string literal keys, including inline hints, key completion, quick documentation, unresolved-key annotation, and Cmd/Ctrl+Click references

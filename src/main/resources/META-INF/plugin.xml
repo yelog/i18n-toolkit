@@ -18,6 +18,24 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.0.6</h3>
+    <h4>Added</h4>
+    <ul>
+        <li>Report generation controls in settings with configurable absolute or project-relative output directories</li>
+        <li>Inline i18next <code>ns:key</code> syntax for key resolution, completion, and navigation</li>
+    </ul>
+    <h4>Changed</h4>
+    <ul>
+        <li>Replaced full cache rebuilds with incremental file-level cache invalidation on translation file changes</li>
+        <li>Moved cache-driven editor updates to a delayed silent background refresh to reduce flicker while typing</li>
+        <li>Updated the Gradle wrapper, Kotlin, IntelliJ Platform Gradle plugin, Qodana, Kover, and CI action dependencies</li>
+    </ul>
+    <h4>Fixed</h4>
+    <ul>
+        <li>Resolved keys against configured default i18next namespaces when no explicit namespace is present</li>
+        <li>Refreshed the VFS before opening generated reports and handled file-open failures gracefully</li>
+    </ul>
+
     <h3>0.0.5</h3>
     <h4>Added</h4>
     <ul>
