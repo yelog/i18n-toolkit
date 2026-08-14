@@ -74,7 +74,10 @@ object I18nNamespaceResolver {
             }
         }
         val namespace = resolveNamespace(tCallExpression)
-        return "$namespace$key"
+        if (namespace.isNotEmpty()) return "$namespace$key"
+
+        val defaultNamespace = I18nCacheService.getInstance(tCallExpression.project).getDefaultNamespace()
+        return if (defaultNamespace.isNullOrBlank()) key else "$defaultNamespace.$key"
     }
 
     /**

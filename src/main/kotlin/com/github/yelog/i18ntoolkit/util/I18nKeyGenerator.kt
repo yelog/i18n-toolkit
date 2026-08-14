@@ -116,7 +116,7 @@ object I18nKeyGenerator {
             }
             afterLocaleParts.size >= 1 -> {
                 val locale = afterLocaleParts.find { isLocale(it) }
-                    ?: if (isLocale(fileName)) fileName else "unknown"
+                    ?: if (isLocale(fileName)) fileName else afterLocaleParts.first()
                 val module = if (isLocale(fileName)) null else fileName
                 LocaleModuleInfo(locale = locale, module = module)
             }

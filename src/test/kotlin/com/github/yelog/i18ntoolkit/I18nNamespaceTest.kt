@@ -173,6 +173,64 @@ class I18nNamespaceTest : BasePlatformTestCase() {
         assertEquals("common.greet", candidate!!.fullKey)
     }
 
+    fun testDefaultNamespaceResolvesBareKeyFromI18nextConfig() {
+        myFixture.tempDirFixture.createFile(
+            "src/i18n/config.js",
+            """
+            i18n.init({
+              defaultNS: 'translations'
+            })
+            """.trimIndent()
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/i18n/locales/english/translations.json",
+            """{"misc":{"translation-pending":"Help us translate"}}"""
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/main.ts",
+            "const message = t('misc.translation-pending')"
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        val psiFile = PsiManager.getInstance(project)
+            .findFile(myFixture.findFileInTempDir("src/main.ts")!!)!!
+        val keyOffset = psiFile.text.indexOf("misc.translation-pending")
+        val candidate = I18nKeyExtractor.findKeyAtOffset(psiFile, keyOffset, cacheService)
+
+        assertNotNull(candidate)
+        assertEquals("translations.misc.translation-pending", candidate!!.fullKey)
+        assertFalse(cacheService.getAllTranslations(candidate.fullKey).isEmpty())
+
+        val literal = PsiTreeUtil.findChildOfType(psiFile, JSLiteralExpression::class.java)
+        assertNotNull(literal)
+        val reference = literal!!.references.filterIsInstance<I18nKeyReference>().firstOrNull()
+        assertNotNull("No i18n reference created for a default namespace key", reference)
+        assertNotNull("Default namespace key should resolve for navigation", reference!!.resolve())
+    }
+
+    fun testNamedLocaleDirectoryIsKeptDistinct() {
+        myFixture.tempDirFixture.createFile(
+            "src/i18n/locales/english/translations.json",
+            """{"greeting":"Hello"}"""
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/i18n/locales/espanol/translations.json",
+            """{"greeting":"Hola"}"""
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        assertContainsElements(cacheService.getAvailableLocales(), "english", "espanol")
+        assertContainsElements(
+            cacheService.getAllTranslations("translations.greeting").keys,
+            "english",
+            "espanol"
+        )
+    }
+
     // Note: Find Usages reverse search (translation JSON → code) also routes
     // through I18nNamespaceResolver.getFullKey via
     // I18nFindUsagesHandlerFactory.checkCallExpression, so the colon key is

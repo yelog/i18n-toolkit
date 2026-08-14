@@ -19,6 +19,7 @@ import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.util.I18nKeyGenerator
 import com.github.yelog.i18ntoolkit.util.I18nLocaleUtils
 import com.github.yelog.i18ntoolkit.util.I18nModuleResolver
+import com.github.yelog.i18ntoolkit.util.I18nDefaultNamespaceResolver
 import com.github.yelog.i18ntoolkit.util.I18nUiRefresher
 
 @Service(Service.Level.PROJECT)
@@ -69,6 +70,7 @@ class I18nCacheService(private val project: Project) : Disposable {
 
         val translationFiles = I18nDirectoryScanner.scanForTranslationFiles(project)
         val framework = I18nFrameworkDetector.detect(project)
+        val defaultNamespace = I18nDefaultNamespaceResolver.findDefaultNamespace(project)
         val data = TranslationData(framework)
         val keyIndex = mutableMapOf<String, MutableSet<TranslationEntry>>()
         val moduleDataMap = mutableMapOf<String, TranslationData>()
@@ -144,7 +146,7 @@ class I18nCacheService(private val project: Project) : Disposable {
 
         val immutableKeyIndex = keyIndex.mapValues { (_, entries) -> entries.toSet() }
         val immutableModuleTranslations = moduleDataMap.toMap()
-        return CacheSnapshot(data, immutableKeyIndex, immutableModuleTranslations)
+        return CacheSnapshot(data, immutableKeyIndex, immutableModuleTranslations, defaultNamespace)
     }
 
     private fun publishSnapshot(snapshot: CacheSnapshot) {
@@ -188,7 +190,7 @@ class I18nCacheService(private val project: Project) : Disposable {
     fun getAvailableLocales(): List<String> {
         val locales = cacheSnapshot.get().translationData.files
             .map { it.locale }
-            .filter { I18nLocaleUtils.isLocaleName(it) }
+            .filter { it != "unknown" }
 
         return locales
             .groupBy { I18nLocaleUtils.normalizeLocale(it) }
@@ -214,6 +216,10 @@ class I18nCacheService(private val project: Project) : Disposable {
         return cacheSnapshot.get().translationData.framework
     }
 
+    fun getDefaultNamespace(): String? {
+        return cacheSnapshot.get().defaultNamespace
+    }
+
     fun isTranslationFile(file: VirtualFile): Boolean {
         return cacheSnapshot.get().translationData.files.any { it.file == file }
     }
@@ -223,7 +229,9 @@ class I18nCacheService(private val project: Project) : Disposable {
     }
 
     fun invalidateFile(file: VirtualFile) {
-        if (I18nDirectoryScanner.isTranslationFile(file)) {
+        if (I18nDirectoryScanner.isTranslationFile(file) ||
+            I18nDefaultNamespaceResolver.isPotentialConfigFile(file)
+        ) {
             refresh()
             I18nUiRefresher.refresh(project)
         }
@@ -235,6 +243,10 @@ class I18nCacheService(private val project: Project) : Disposable {
      * Much faster than full refresh for large projects.
      */
     fun invalidateFileIncremental(file: VirtualFile) {
+        if (I18nDefaultNamespaceResolver.isPotentialConfigFile(file)) {
+            refresh()
+            return
+        }
         if (!I18nDirectoryScanner.isTranslationFile(file)) return
 
         val basePath = project.basePath ?: return
@@ -399,7 +411,12 @@ class I18nCacheService(private val project: Project) : Disposable {
             translations = newTranslations
         )
 
-        return CacheSnapshot(newTranslationData, immutableKeyIndex, immutableModuleTranslations)
+        return CacheSnapshot(
+            newTranslationData,
+            immutableKeyIndex,
+            immutableModuleTranslations,
+            currentSnapshot.defaultNamespace
+        )
     }
 
     fun getOtherLocaleFiles(file: VirtualFile, key: String): List<TranslationEntry> {
@@ -506,10 +523,11 @@ class I18nCacheService(private val project: Project) : Disposable {
     private data class CacheSnapshot(
         val translationData: TranslationData,
         val keyToEntries: Map<String, Set<TranslationEntry>>,
-        val moduleTranslations: Map<String, TranslationData> = emptyMap()
+        val moduleTranslations: Map<String, TranslationData> = emptyMap(),
+        val defaultNamespace: String? = null
     ) {
         companion object {
-            val EMPTY = CacheSnapshot(TranslationData(I18nFramework.UNKNOWN), emptyMap(), emptyMap())
+            val EMPTY = CacheSnapshot(TranslationData(I18nFramework.UNKNOWN), emptyMap(), emptyMap(), null)
         }
     }
 

@@ -2,6 +2,7 @@ package com.github.yelog.i18ntoolkit.listener
 
 import com.github.yelog.i18ntoolkit.scanner.I18nDirectoryScanner
 import com.github.yelog.i18ntoolkit.service.I18nCacheService
+import com.github.yelog.i18ntoolkit.util.I18nDefaultNamespaceResolver
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.openapi.vfs.AsyncFileListener
 import com.intellij.openapi.vfs.newvfs.events.*
@@ -16,7 +17,10 @@ class I18nFileListener : AsyncFileListener {
                 is VFileCreateEvent,
                 is VFileDeleteEvent,
                 is VFileMoveEvent,
-                is VFileCopyEvent -> I18nDirectoryScanner.isTranslationFile(file)
+                is VFileCopyEvent -> {
+                    I18nDirectoryScanner.isTranslationFile(file) ||
+                        I18nDefaultNamespaceResolver.isPotentialConfigFile(file)
+                }
                 else -> false
             }
         }
