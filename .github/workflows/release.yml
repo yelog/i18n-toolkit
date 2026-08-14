@@ -1,42 +1,31 @@
-# GitHub Actions Workflow created for handling the release process based on the draft release prepared with the Build workflow.
-# Running the publishPlugin task requires all the following secrets to be provided: PUBLISH_TOKEN, PRIVATE_KEY, PRIVATE_KEY_PASSWORD, CERTIFICATE_CHAIN.
-# See https://plugins.jetbrains.com/docs/intellij/plugin-signing.html for more information.
-
 name: Release
+
 on:
-  release:
-    types: [prereleased, released]
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-
-  # Prepare and publish the plugin to JetBrains Marketplace repository
   release:
-    name: Publish Plugin
+    name: Build and publish release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
+
     steps:
-
-      # Free GitHub Actions Environment Disk Space
-      - name: Maximize Build Space
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          large-packages: false
-
-      # Check out the current repository
-      - name: Fetch Sources
+      - name: Check out tagged commit
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.release.tag_name }}
 
-      # Set up the Java environment for the next steps
-      - name: Setup Java
+      - name: Set up JDK 21
         uses: actions/setup-java@v5
         with:
-          distribution: zulu
-          java-version: 21
+          distribution: temurin
+          java-version: "21"
 
       # Setup Gradle
       - name: Setup Gradle
@@ -44,57 +33,89 @@ jobs:
         with:
           cache-read-only: true
 
-      # Update the Unreleased section with the current release note
-      - name: Patch Changelog
-        if: ${{ github.event.release.body != '' }}
-        env:
-          CHANGELOG: ${{ github.event.release.body }}
+      - name: Validate release version
+        id: release_version
+        shell: bash
         run: |
-          RELEASE_NOTE="./build/tmp/release_note.txt"
-          mkdir -p "$(dirname "$RELEASE_NOTE")"
-          echo "$CHANGELOG" > $RELEASE_NOTE
+          set -euo pipefail
 
-          ./gradlew patchChangelog --release-note-file=$RELEASE_NOTE
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$tag_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Tag must use the vX.Y.Z format: $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
 
-      # Publish the plugin to JetBrains Marketplace
-      - name: Publish Plugin
+          project_version="$(awk -F= '
+            /^[[:space:]]*pluginVersion[[:space:]]*=/ {
+              value = $2
+              gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+              print value
+              exit
+            }
+          ' gradle.properties)"
+
+          if [[ -z "$project_version" ]]; then
+            echo "pluginVersion is missing from gradle.properties" >&2
+            exit 1
+          fi
+
+          if [[ "$tag_version" != "$project_version" ]]; then
+            echo "Tag version $tag_version does not match pluginVersion $project_version" >&2
+            exit 1
+          fi
+
+          echo "version=$tag_version" >> "$GITHUB_OUTPUT"
+
+      - name: Build plugin
+        run: ./gradlew buildPlugin
+
+      - name: Prepare release notes and assets
         env:
-          PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}
-          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
-        run: ./gradlew publishPlugin
-
-      # Upload an artifact as a release asset
-      - name: Upload Release Asset
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload ${{ github.event.release.tag_name }} ./build/distributions/*
-
-      # Create a pull request
-      - name: Create Pull Request
-        if: ${{ github.event.release.body != '' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.release_version.outputs.version }}
+        shell: bash
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          BRANCH="changelog-update-$VERSION"
-          LABEL="release changelog"
+          set -euo pipefail
 
-          git config user.email "action@github.com"
-          git config user.name "GitHub Action"
+          awk -v heading="## $VERSION" '
+            $0 == heading { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
 
-          git checkout -b $BRANCH
-          git commit -am "Changelog update - $VERSION"
-          git push --set-upstream origin $BRANCH
+          if [[ ! -s release-notes.md ]] || ! awk 'NF { found = 1 } END { exit !found }' release-notes.md; then
+            echo "No release notes found for version $VERSION in CHANGELOG.md" >&2
+            exit 1
+          fi
 
-          gh label create "$LABEL" \
-            --description "Pull requests with release changelog update" \
-            --force \
-            || true
+          shopt -s nullglob
+          artifacts=(build/distributions/*-"$VERSION".zip)
+          if (( ${#artifacts[@]} == 0 )); then
+            echo "No plugin ZIP found for version $VERSION in build/distributions" >&2
+            exit 1
+          fi
 
-          gh pr create \
-            --title "Changelog update - \`$VERSION\`" \
-            --body "Current pull request contains patched \`CHANGELOG.md\` file for the \`$VERSION\` version." \
-            --label "$LABEL" \
-            --head $BRANCH
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.release_version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$TAG" \
+              --notes-file release-notes.md
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "$TAG" \
+              --notes-file release-notes.md
+          fi
+
+          gh release upload "$TAG" build/distributions/*-"$VERSION".zip \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
