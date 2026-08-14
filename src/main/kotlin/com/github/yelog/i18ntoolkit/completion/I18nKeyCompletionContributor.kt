@@ -124,7 +124,6 @@ class I18nKeyCompletionContributor : CompletionContributor() {
         // Calculate how much of the string content is before the cursor
         val cursorOffsetInContent = (cursorOffsetInFile - contentStartInFile).coerceIn(0, stringContent.length)
         val currentText = stringContent.substring(0, cursorOffsetInContent)
-        val currentTextLower = currentText.lowercase()
 
         logger.debug("Current input text: '$currentText', full string: '$stringContent'")
 
@@ -139,13 +138,20 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             return
         }
 
-        // Resolve namespace context (remove trailing dot)
-        val namespaceWithDot = I18nNamespaceResolver.resolveNamespace(callExpression)
-        val namespace = if (namespaceWithDot.isNotEmpty()) {
-            namespaceWithDot.removeSuffix(".")
+        // Resolve namespace context. i18next inline colon ('ns:key') takes
+        // priority over the useTranslation hook, matching i18next's resolution.
+        val inlineNs = I18nNamespaceResolver.detectInlineNamespaceInput(currentText)
+        val hookNamespaceWithDot = I18nNamespaceResolver.resolveNamespace(callExpression)
+        val namespaceWithDot = if (inlineNs != null) "$inlineNs." else hookNamespaceWithDot
+        val namespace = namespaceWithDot.removeSuffix(".").takeIf { it.isNotEmpty() }
+
+        // For matching, strip a typed 'ns:' prefix so 'ns:bill' ranks against 'ns.bill_*'
+        val matchInput = if (inlineNs != null) {
+            currentText.substringAfter("${inlineNs}${I18nNamespaceResolver.NS_SEPARATOR}")
         } else {
-            null
+            currentText
         }
+        val matchInputLower = matchInput.lowercase()
 
         // Get display locale for showing translations and matching
         val settings = I18nSettingsState.getInstance(project)
@@ -166,7 +172,7 @@ class I18nKeyCompletionContributor : CompletionContributor() {
 
         // Filter and rank keys based on fuzzy matching (key + display translation)
         val rankedKeys = rankKeysByMatch(
-            currentText,
+            matchInput,
             allKeys.toList(),
             namespace
         ) { key -> displayTranslations[key] }
@@ -194,9 +200,13 @@ class I18nKeyCompletionContributor : CompletionContributor() {
             val translationValue = typeTexts[key]
             val translationDisplay = translationValue?.take(I18nConstants.Display.TRANSLATION_PREVIEW_MAX_LENGTH) ?: ""
 
-            // Determine the key to show (remove namespace prefix if applicable)
+            // Determine the key to show. For a useTranslation hook namespace, strip the
+            // 'ns.' prefix (the hook supplies the namespace at runtime). For an i18next
+            // inline colon namespace, keep it in colon form ('ns:key') so the insert
+            // handler (which replaces the whole string content) preserves the namespace.
             val displayKey = if (namespace != null && key.startsWith("$namespace.")) {
-                key.removePrefix("$namespace.")
+                val stripped = key.removePrefix("$namespace.")
+                if (inlineNs != null) "$inlineNs${I18nNamespaceResolver.NS_SEPARATOR}$stripped" else stripped
             } else {
                 key
             }
@@ -258,14 +268,14 @@ class I18nKeyCompletionContributor : CompletionContributor() {
                 }
 
             val shouldHighlightTranslation = translationDisplay.isNotBlank() &&
-                currentTextLower.isNotBlank() &&
-                !displayKeyLower.contains(currentTextLower) &&
-                hasTranslationMatch(translationDisplay, currentText)
+                matchInputLower.isNotBlank() &&
+                !displayKeyLower.contains(matchInputLower) &&
+                hasTranslationMatch(translationDisplay, matchInput)
 
             if (shouldHighlightTranslation) {
                 lookupElement.putUserData(
                     TRANSLATION_HIGHLIGHT_KEY,
-                    TranslationHighlightInfo(currentText)
+                    TranslationHighlightInfo(matchInput)
                 )
             }
 

@@ -1,6 +1,9 @@
 package com.github.yelog.i18ntoolkit.util
 
+import com.github.yelog.i18ntoolkit.model.I18nFramework
+import com.github.yelog.i18ntoolkit.service.I18nCacheService
 import com.intellij.lang.javascript.psi.*
+import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiRecursiveElementVisitor
 import com.intellij.psi.util.PsiTreeUtil
@@ -11,13 +14,33 @@ import com.intellij.psi.util.PsiTreeUtil
  * - const { t } = useTranslation('namespace')
  * - const { t } = useTranslation(['ns1', 'ns2'])
  * - const { t } = useI18n({ messages: ... })
+ *
+ * Also supports i18next inline namespace syntax: t('namespace:key')
+ * (i18next default nsSeparator is ':').
  */
 object I18nNamespaceResolver {
+
+    /**
+     * i18next default inline namespace separator.
+     */
+    const val NS_SEPARATOR = ':'
 
     private val translationHooks = setOf(
         "useTranslation",  // react-i18next
         "useI18n",         // vue-i18n
         "useTranslations"  // next-intl
+    )
+
+    /**
+     * Frameworks that use ':' as an inline namespace separator (i18next family).
+     * UNKNOWN is included (best-effort) so monorepos where framework detection
+     * falls back to UNKNOWN still work; lookup fallback to the raw key keeps
+     * this safe for non-i18next projects.
+     */
+    private val inlineNsFrameworks = setOf(
+        I18nFramework.REACT_I18NEXT,
+        I18nFramework.I18NEXT,
+        I18nFramework.UNKNOWN
     )
 
     /**
@@ -38,11 +61,49 @@ object I18nNamespaceResolver {
     }
 
     /**
-     * Get the full key by prepending namespace if applicable
+     * Get the full key by prepending namespace if applicable.
+     *
+     * i18next inline namespace ('ns:key') takes priority over the
+     * useTranslation hook (matching i18next's resolution semantics) and is
+     * normalized to the plugin's dotted cache form ('ns.key').
      */
     fun getFullKey(tCallExpression: JSCallExpression, key: String): String {
+        if (shouldParseInlineNamespace(tCallExpression.project)) {
+            extractInlineNamespace(key)?.let { (ns, realKey) ->
+                return "$ns.$realKey"
+            }
+        }
         val namespace = resolveNamespace(tCallExpression)
         return "$namespace$key"
+    }
+
+    /**
+     * Parse an i18next inline namespace key like 'account_bill:bill_record'
+     * into (namespace, realKey). Returns null when there is no separator or
+     * the namespace/key part is blank. Only the first separator is considered.
+     */
+    fun extractInlineNamespace(key: String): Pair<String, String>? {
+        val idx = key.indexOf(NS_SEPARATOR)
+        if (idx <= 0 || idx >= key.length - 1) return null
+        val ns = key.substring(0, idx)
+        val realKey = key.substring(idx + 1)
+        if (ns.isBlank() || realKey.isBlank()) return null
+        return ns to realKey
+    }
+
+    /**
+     * Detect an inline namespace already typed by the user (e.g. 'account_bill:'
+     * or 'account_bill:bill') for completion context. Returns the namespace or null.
+     */
+    fun detectInlineNamespaceInput(input: String): String? {
+        val idx = input.indexOf(NS_SEPARATOR)
+        if (idx <= 0) return null
+        val ns = input.substring(0, idx)
+        return ns.takeIf { it.isNotBlank() }
+    }
+
+    private fun shouldParseInlineNamespace(project: Project): Boolean {
+        return I18nCacheService.getInstance(project).getFramework() in inlineNsFrameworks
     }
 
     private fun findUseTranslationNamespace(scope: PsiElement): String {
