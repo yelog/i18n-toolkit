@@ -8,3 +8,6 @@ build
 
 # CodeGraph index
 .codegraph
+
+# Plans
+.omo
