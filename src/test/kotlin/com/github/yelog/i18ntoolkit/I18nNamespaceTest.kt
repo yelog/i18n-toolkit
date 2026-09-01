@@ -230,6 +230,115 @@ class I18nNamespaceTest : BasePlatformTestCase() {
         assertFalse(cacheService.getAllTranslations(candidate.fullKey).isEmpty())
     }
 
+    fun testNestedTranslationBindingDoesNotInheritOuterNamespace() {
+        myFixture.tempDirFixture.createFile(
+            "src/page.tsx",
+            """
+            import { useTranslations } from 'next-intl'
+
+            export default function Page() {
+              const t = useTranslations('outer')
+
+              function Child() {
+                const t = useTranslations()
+                return t('title')
+              }
+
+              return <Child />
+            }
+            """.trimIndent()
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        val psiFile = PsiManager.getInstance(project)
+            .findFile(myFixture.findFileInTempDir("src/page.tsx")!!)!!
+        val keyOffset = psiFile.text.indexOf("'title'") + 1
+        val candidate = I18nKeyExtractor.findKeyAtOffset(psiFile, keyOffset, cacheService)
+
+        assertNotNull(candidate)
+        assertEquals("title", candidate!!.fullKey)
+    }
+
+    fun testDynamicNestedTranslationBindingDoesNotInheritOuterNamespace() {
+        myFixture.tempDirFixture.createFile(
+            "src/page.tsx",
+            """
+            import { useTranslations } from 'next-intl'
+
+            export default function Page({ namespace }) {
+              const t = useTranslations('outer')
+
+              function Child() {
+                const t = useTranslations(namespace)
+                return t('title')
+              }
+
+              return <Child />
+            }
+            """.trimIndent()
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        val psiFile = PsiManager.getInstance(project)
+            .findFile(myFixture.findFileInTempDir("src/page.tsx")!!)!!
+        val keyOffset = psiFile.text.indexOf("'title'") + 1
+        val candidate = I18nKeyExtractor.findKeyAtOffset(psiFile, keyOffset, cacheService)
+
+        assertNotNull(candidate)
+        assertEquals("title", candidate!!.fullKey)
+    }
+
+    fun testSiblingNestedFunctionCannotProvideNamespace() {
+        myFixture.tempDirFixture.createFile(
+            "src/page.tsx",
+            """
+            import { useTranslations } from 'next-intl'
+
+            export default function Page() {
+              function Child() {
+                const t = useTranslations('child')
+                return t('childTitle')
+              }
+
+              const handleClick = () => t('pageTitle')
+              return <Child />
+            }
+            """.trimIndent()
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        val psiFile = PsiManager.getInstance(project)
+            .findFile(myFixture.findFileInTempDir("src/page.tsx")!!)!!
+        val keyOffset = psiFile.text.indexOf("'pageTitle'") + 1
+        val candidate = I18nKeyExtractor.findKeyAtOffset(psiFile, keyOffset, cacheService)
+
+        assertNotNull(candidate)
+        assertEquals("pageTitle", candidate!!.fullKey)
+    }
+
+    fun testHookAssignedToDifferentVariableCannotProvideNamespace() {
+        myFixture.tempDirFixture.createFile(
+            "src/page.tsx",
+            """
+            import { useTranslations } from 'next-intl'
+
+            export default function Page() {
+              const translate = useTranslations('unrelated')
+              return t('title')
+            }
+            """.trimIndent()
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        val psiFile = PsiManager.getInstance(project)
+            .findFile(myFixture.findFileInTempDir("src/page.tsx")!!)!!
+        val keyOffset = psiFile.text.indexOf("'title'") + 1
+        val candidate = I18nKeyExtractor.findKeyAtOffset(psiFile, keyOffset, cacheService)
+
+        assertNotNull(candidate)
+        assertEquals("title", candidate!!.fullKey)
+    }
+
     fun testDefaultNamespaceResolvesBareKeyFromI18nextConfig() {
         myFixture.tempDirFixture.createFile(
             "src/i18n/config.js",

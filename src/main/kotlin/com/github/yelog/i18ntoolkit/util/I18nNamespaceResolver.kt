@@ -48,28 +48,46 @@ object I18nNamespaceResolver {
      * Returns the namespace prefix (with trailing dot) or empty string if not found
      */
     fun resolveNamespace(tCallExpression: JSCallExpression): String {
-        // Find the function/component containing this t() call, then walk outward.
-        // React components often create `t` in the component body and use it from
-        // nested callbacks such as event handlers.
-        var containingFunction: PsiElement? = PsiTreeUtil.getParentOfType(
-            tCallExpression,
+        val methodExpression = tCallExpression.methodExpression as? JSReferenceExpression
+            ?: return ""
+        val namespace = try {
+            methodExpression.resolve()?.let(::namespaceFromDeclaration)
+        } catch (_: LinkageError) {
+            null
+        } ?: resolveNamespaceFromScopes(tCallExpression, methodExpression.referenceName)
+        return if (namespace.isNotEmpty()) "$namespace." else ""
+    }
+
+    private fun namespaceFromDeclaration(declaration: PsiElement): String? {
+        val initializer = when (declaration) {
+            is JSInitializerOwner -> declaration.initializer
+            is JSDestructuringProperty -> PsiTreeUtil.getParentOfType(
+                declaration,
+                JSDestructuringElement::class.java
+            )?.initializer
+            else -> null
+        } as? JSCallExpression ?: return null
+        val hookName = (initializer.methodExpression as? JSReferenceExpression)?.referenceName
+        if (hookName !in translationHooks) return null
+        return extractNamespaceFromHook(initializer)
+    }
+
+    private fun resolveNamespaceFromScopes(call: JSCallExpression, referenceName: String?): String {
+        if (referenceName == null) return ""
+        var scope: PsiElement? = PsiTreeUtil.getParentOfType(
+            call,
             JSFunction::class.java,
             JSFunctionExpression::class.java
         )
-
-        while (containingFunction != null) {
-            val namespace = findUseTranslationNamespace(containingFunction)
-            if (namespace.isNotEmpty()) {
-                return "$namespace."
-            }
-
-            containingFunction = PsiTreeUtil.getParentOfType(
-                containingFunction,
+        while (scope != null) {
+            val declaration = findDeclarationInScope(scope, referenceName)
+            if (declaration != null) return namespaceFromDeclaration(declaration) ?: ""
+            scope = PsiTreeUtil.getParentOfType(
+                scope,
                 JSFunction::class.java,
                 JSFunctionExpression::class.java
             )
         }
-
         return ""
     }
 
@@ -122,27 +140,53 @@ object I18nNamespaceResolver {
         return I18nCacheService.getInstance(project).getFramework() in inlineNsFrameworks
     }
 
-    private fun findUseTranslationNamespace(scope: PsiElement): String {
-        var namespace = ""
-
+    private fun findDeclarationInScope(scope: PsiElement, name: String): PsiElement? {
+        var declaration: PsiElement? = null
         scope.accept(object : PsiRecursiveElementVisitor() {
             override fun visitElement(element: PsiElement) {
-                if (namespace.isNotEmpty()) return // Already found
+                if (declaration != null) return
+                if (element !== scope && (element is JSFunction || element is JSFunctionExpression)) return
+                if (element is JSCallExpression && isTranslationHook(element)) {
+                    val variableDeclaration = PsiTreeUtil.getParentOfType(
+                        element,
+                        JSVariable::class.java
+                    )
+                    if (variableDeclaration?.let { declarationName(it) == name } == true) {
+                        declaration = variableDeclaration
+                        return
+                    }
 
-                if (element is JSCallExpression) {
-                    val methodExpr = element.methodExpression as? JSReferenceExpression
-                    val methodName = methodExpr?.referenceName
-
-                    if (methodName != null && translationHooks.contains(methodName)) {
-                        namespace = extractNamespaceFromHook(element)
+                    val destructuringElement = PsiTreeUtil.getParentOfType(
+                        element,
+                        JSDestructuringElement::class.java
+                    )
+                    val destructuringDeclaration = (destructuringElement?.target as? JSDestructuringObject)
+                        ?.findProperty(name)
+                    if (destructuringDeclaration != null) {
+                        declaration = destructuringDeclaration
+                        return
                     }
                 }
-
+                if (element is JSVariable && element.name == name) {
+                    declaration = element
+                } else if (element is JSDestructuringProperty && element.name == name) {
+                    declaration = element
+                }
                 super.visitElement(element)
             }
         })
+        return declaration
+    }
 
-        return namespace
+    private fun isTranslationHook(call: JSCallExpression): Boolean {
+        val methodName = (call.methodExpression as? JSReferenceExpression)?.referenceName
+        return methodName in translationHooks
+    }
+
+    private fun declarationName(declaration: PsiElement): String? = when (declaration) {
+        is JSVariable -> declaration.name
+        is JSDestructuringProperty -> declaration.name
+        else -> null
     }
 
     private fun extractNamespaceFromHook(hookCall: JSCallExpression): String {
