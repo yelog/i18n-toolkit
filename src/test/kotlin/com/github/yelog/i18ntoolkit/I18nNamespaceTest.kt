@@ -173,6 +173,63 @@ class I18nNamespaceTest : BasePlatformTestCase() {
         assertEquals("common.greet", candidate!!.fullKey)
     }
 
+    fun testNextIntlNamespaceResolvesFromOuterComponentForNestedHandler() {
+        myFixture.tempDirFixture.createFile(
+            "i18n/en.json",
+            """
+            {
+              "Subscriptions": {
+                "Fresh": {
+                  "Cancellation": {
+                    "SecondarySaveTactics": {
+                      "Discount": {
+                        "Feedback": {
+                          "Success": {
+                            "title": "Nice one"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            """.trimIndent()
+        )
+        myFixture.tempDirFixture.createFile(
+            "src/page.tsx",
+            """
+            import { useTranslations } from 'next-intl'
+
+            export default function Page() {
+              const t = useTranslations('Subscriptions.Fresh.Cancellation.SecondarySaveTactics.Discount')
+
+              const handleAcceptDiscountOffer = async () => {
+                const title = t('Feedback.Success.title')
+                return title
+              }
+
+              return null
+            }
+            """.trimIndent()
+        )
+
+        val cacheService = I18nCacheService.getInstance(project)
+        ApplicationManager.getApplication().executeOnPooledThread { cacheService.refresh() }.get()
+
+        val psiFile = PsiManager.getInstance(project)
+            .findFile(myFixture.findFileInTempDir("src/page.tsx")!!)!!
+        val keyOffset = psiFile.text.indexOf("Feedback.Success.title")
+        val candidate = I18nKeyExtractor.findKeyAtOffset(psiFile, keyOffset, cacheService)
+
+        assertNotNull(candidate)
+        assertEquals(
+            "Subscriptions.Fresh.Cancellation.SecondarySaveTactics.Discount.Feedback.Success.title",
+            candidate!!.fullKey
+        )
+        assertFalse(cacheService.getAllTranslations(candidate.fullKey).isEmpty())
+    }
+
     fun testDefaultNamespaceResolvesBareKeyFromI18nextConfig() {
         myFixture.tempDirFixture.createFile(
             "src/i18n/config.js",

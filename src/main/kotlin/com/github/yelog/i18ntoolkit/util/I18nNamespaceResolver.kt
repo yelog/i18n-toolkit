@@ -48,16 +48,29 @@ object I18nNamespaceResolver {
      * Returns the namespace prefix (with trailing dot) or empty string if not found
      */
     fun resolveNamespace(tCallExpression: JSCallExpression): String {
-        // Find the function/component containing this t() call
-        val containingFunction = PsiTreeUtil.getParentOfType(
+        // Find the function/component containing this t() call, then walk outward.
+        // React components often create `t` in the component body and use it from
+        // nested callbacks such as event handlers.
+        var containingFunction: PsiElement? = PsiTreeUtil.getParentOfType(
             tCallExpression,
             JSFunction::class.java,
             JSFunctionExpression::class.java
-        ) ?: return ""
+        )
 
-        // Search for useTranslation call in the same scope
-        val namespace = findUseTranslationNamespace(containingFunction)
-        return if (namespace.isNotEmpty()) "$namespace." else ""
+        while (containingFunction != null) {
+            val namespace = findUseTranslationNamespace(containingFunction)
+            if (namespace.isNotEmpty()) {
+                return "$namespace."
+            }
+
+            containingFunction = PsiTreeUtil.getParentOfType(
+                containingFunction,
+                JSFunction::class.java,
+                JSFunctionExpression::class.java
+            )
+        }
+
+        return ""
     }
 
     /**

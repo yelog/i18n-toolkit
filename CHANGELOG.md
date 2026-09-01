@@ -16,6 +16,7 @@
 ### Fixed
 - Blocked key rename when the target key already exists in overlapping locales to avoid accidental overwrite
 - Ensured text-based translation file writes are explicitly saved so cache refresh reflects new keys/values immediately
+- Resolved next-intl namespaces from outer React component scopes when `t(...)` is used inside nested callbacks.
 
 ## 0.0.6
 ### Added
