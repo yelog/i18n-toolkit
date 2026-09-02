@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+## 0.0.8
+
+### Changed
+- Automated GitHub Release creation now validates version tags and atomically publishes plugin assets.
+
+### Fixed
+- Resolved next-intl namespaces from enclosing React component scopes when `t(...)` is used inside nested callbacks.
+- Resolved translation namespaces from the actual lexical binding and prevented nested or sibling functions from contributing unrelated namespaces.
+- Prevented the TOML parser's legacy Gson dependency from conflicting with IntelliJ Platform runtime dependencies.
+
 ## 0.0.7
 
 ### Changed

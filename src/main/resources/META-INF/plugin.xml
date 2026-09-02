@@ -18,6 +18,18 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.0.8</h3>
+    <h4>Changed</h4>
+    <ul>
+        <li>Automated GitHub Release creation now validates version tags and atomically publishes plugin assets.</li>
+    </ul>
+    <h4>Fixed</h4>
+    <ul>
+        <li>Resolved next-intl namespaces from enclosing React component scopes when <code>t(...)</code> is used inside nested callbacks.</li>
+        <li>Resolved translation namespaces from the actual lexical binding and prevented nested or sibling functions from contributing unrelated namespaces.</li>
+        <li>Prevented the TOML parser's legacy Gson dependency from conflicting with IntelliJ Platform runtime dependencies.</li>
+    </ul>
+
     <h3>0.0.7</h3>
     <h4>Changed</h4>
     <ul>
