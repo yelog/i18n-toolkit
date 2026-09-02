@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## 0.0.7
+
+### Changed
+- Automated GitHub Release creation now builds and attaches the plugin distribution for version tags.
+
+### Fixed
+- Resolved next-intl namespaces from enclosing React component scopes when `t(...)` is used inside nested callbacks.
+- Resolved translation namespaces from the actual lexical binding and prevented nested or sibling functions from contributing unrelated namespaces.
+
 ### Added
 - Added end-to-end key creation and translation editing support for YAML/TOML locale files
 - Added translation consistency helpers to detect missing locales and batch-create missing entries
