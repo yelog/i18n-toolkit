@@ -41,7 +41,11 @@ dependencies {
     // YAML parsing
     implementation("org.yaml:snakeyaml:2.6")
     // TOML parsing
-    implementation("com.moandjiezana.toml:toml4j:0.7.2")
+    implementation("com.moandjiezana.toml:toml4j:0.7.2") {
+        // IntelliJ Platform provides Gson; toml4j's Gson 2.8.1 conflicts with it
+        // and breaks platform code that calls JsonReader.setStrictness(...).
+        exclude(group = "com.google.code.gson", module = "gson")
+    }
 
     // IntelliJ Platform Gradle Plugin Dependencies Extension - read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin-dependencies-extension.html
     intellijPlatform {
