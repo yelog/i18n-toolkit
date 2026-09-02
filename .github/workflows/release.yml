@@ -114,29 +114,12 @@ jobs:
           set -euo pipefail
 
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            is_draft="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft')"
-            if [[ "$is_draft" != "true" ]]; then
-              echo "Release $TAG is already published and immutable; refusing to upload or replace assets" >&2
-              exit 1
-            fi
-            gh release edit "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --title "$TAG" \
-              --notes-file release-notes.md \
-              --draft
-          else
-            gh release create "$TAG" \
-              --repo "$GITHUB_REPOSITORY" \
-              --verify-tag \
-              --title "$TAG" \
-              --notes-file release-notes.md \
-              --draft
+            echo "Release $TAG already exists; immutable releases cannot be reused" >&2
+            exit 1
           fi
 
-          gh release upload "$TAG" build/distributions/*-"$VERSION".zip \
+          gh release create "$TAG" build/distributions/*-"$VERSION".zip \
             --repo "$GITHUB_REPOSITORY" \
-            --clobber
-
-          gh release edit "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft=false
+            --verify-tag \
+            --title "$TAG" \
+            --notes-file release-notes.md
