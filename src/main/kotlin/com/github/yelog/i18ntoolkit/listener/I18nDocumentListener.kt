@@ -11,6 +11,8 @@ import com.intellij.lang.javascript.psi.JSCallExpression
 import com.intellij.lang.javascript.psi.JSLiteralExpression
 import com.intellij.lang.javascript.psi.JSReferenceExpression
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.components.Service
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.FoldRegion
@@ -21,12 +23,13 @@ import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.util.PsiTreeUtil
-import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.Key
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.startup.ProjectActivity
+import com.intellij.openapi.project.Project
+import java.util.Collections
+import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.Timer
 
@@ -35,16 +38,20 @@ import javax.swing.Timer
  * a debounced cache + UI refresh. This complements I18nFileListener which
  * only fires on VFS (disk-level) changes.
  */
-class I18nDocumentListenerRegistrar : ProjectActivity {
-
-    companion object {
-        // User data key to mark documents that already have our listener attached
-        private val LISTENER_ATTACHED_KEY = Key.create<Boolean>("I18nDocumentListenerAttached")
+class I18nDocumentListenerActivity : ProjectActivity {
+    override suspend fun execute(project: Project) {
+        I18nDocumentListenerRegistrar.getInstance(project).initialize()
     }
+}
 
-    override suspend fun execute(project: com.intellij.openapi.project.Project) {
-        val debounceTimer = AtomicReference<Timer?>(null)
+@Service(Service.Level.PROJECT)
+class I18nDocumentListenerRegistrar(private val project: Project) : Disposable {
+    private val attachedDocuments = Collections.synchronizedSet(
+        Collections.newSetFromMap(WeakHashMap<Document, Boolean>())
+    )
+    private val debounceTimer = AtomicReference<Timer?>(null)
 
+    fun initialize() {
         val docListener = object : DocumentListener {
             override fun documentChanged(event: DocumentEvent) {
                 val file = FileDocumentManager.getInstance().getFile(event.document) ?: return
@@ -78,7 +85,7 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
             }
         }
 
-        EditorFactory.getInstance().eventMulticaster.addCaretListener(caretListener, project)
+        EditorFactory.getInstance().eventMulticaster.addCaretListener(caretListener, this)
 
         val editorFactoryListener = object : EditorFactoryListener {
             override fun editorCreated(event: EditorFactoryEvent) {
@@ -90,13 +97,13 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
                 I18nInlayHintsProvider.clearCacheForFile(file.path)
 
                 if (I18nDirectoryScanner.isTranslationFile(file)) {
-                    attachListenerToDocument(document, docListener, project)
+                    attachListenerToDocument(document, docListener)
                 }
             }
         }
 
         // Register for future editors
-        EditorFactory.getInstance().addEditorFactoryListener(editorFactoryListener, project)
+        EditorFactory.getInstance().addEditorFactoryListener(editorFactoryListener, this)
 
         // Process already-open editors
         for (editor in EditorFactory.getInstance().allEditors) {
@@ -104,7 +111,7 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
             val file = FileDocumentManager.getInstance().getFile(document) ?: continue
 
             if (I18nDirectoryScanner.isTranslationFile(file)) {
-                attachListenerToDocument(document, docListener, project)
+                attachListenerToDocument(document, docListener)
             }
         }
 
@@ -113,10 +120,11 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
         // Fixes the issue where hints don't show when IDEA starts with files already open
         I18nUiRefresher.refresh(project)
 
-        // Clean up debounce timer on project dispose
-        Disposer.register(project) {
-            debounceTimer.get()?.stop()
-        }
+    }
+
+    override fun dispose() {
+        debounceTimer.getAndSet(null)?.stop()
+        attachedDocuments.clear()
     }
 
     private fun collapseI18nFoldsOutsideCaret(
@@ -177,16 +185,15 @@ class I18nDocumentListenerRegistrar : ProjectActivity {
      */
     private fun attachListenerToDocument(
         document: Document,
-        listener: DocumentListener,
-        project: com.intellij.openapi.project.Project
+        listener: DocumentListener
     ) {
-        // Check if listener is already attached
-        if (document.getUserData(LISTENER_ATTACHED_KEY) == true) {
-            return
-        }
+        if (!attachedDocuments.add(document)) return
+        document.addDocumentListener(listener, this)
+    }
 
-        // Mark as attached and add the listener
-        document.putUserData(LISTENER_ATTACHED_KEY, true)
-        document.addDocumentListener(listener, project)
+    companion object {
+        fun getInstance(project: Project): I18nDocumentListenerRegistrar {
+            return project.getService(I18nDocumentListenerRegistrar::class.java)
+        }
     }
 }

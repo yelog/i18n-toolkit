@@ -147,10 +147,11 @@
     <extensions defaultExtensionNs="com.intellij">
         <!-- Project Service for caching translations -->
         <projectService serviceImplementation="com.github.yelog.i18ntoolkit.service.I18nCacheService"/>
+        <projectService serviceImplementation="com.github.yelog.i18ntoolkit.listener.I18nDocumentListenerRegistrar"/>
 
         <!-- Startup activity to initialize cache -->
         <postStartupActivity implementation="com.github.yelog.i18ntoolkit.startup.I18nProjectActivity"/>
-        <postStartupActivity implementation="com.github.yelog.i18ntoolkit.listener.I18nDocumentListenerRegistrar"/>
+        <postStartupActivity implementation="com.github.yelog.i18ntoolkit.listener.I18nDocumentListenerActivity"/>
 
         <!-- Goto declaration handler for Cmd+Click on folded regions -->
         <gotoDeclarationHandler implementation="com.github.yelog.i18ntoolkit.navigation.I18nGotoDeclarationHandler" order="first"/>
