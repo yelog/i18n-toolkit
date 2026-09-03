@@ -39,7 +39,7 @@ dependencies {
     testImplementation(libs.opentest4j)
     
     // YAML parsing
-    implementation("org.yaml:snakeyaml:2.6")
+    implementation("org.yaml:snakeyaml:2.7")
     // TOML parsing
     implementation("com.moandjiezana.toml:toml4j:0.7.2") {
         // IntelliJ Platform provides Gson; toml4j's Gson 2.8.1 conflicts with it
