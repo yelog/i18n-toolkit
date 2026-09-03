@@ -18,6 +18,17 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>0.0.9</h3>
+    <h4>Fixed</h4>
+    <ul>
+        <li>Fixed a <code>NullPointerException</code> caused by stale editor listeners accessing project settings after plugin reloads.</li>
+        <li>Ensured editor, caret, and document listeners are disposed with the project service lifecycle.</li>
+    </ul>
+    <h4>Changed</h4>
+    <ul>
+        <li>Updated the Gradle wrapper and GitHub Actions Java setup used by the release workflow.</li>
+    </ul>
+
     <h3>0.0.8</h3>
     <h4>Changed</h4>
     <ul>

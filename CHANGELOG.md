@@ -4,6 +4,15 @@
 
 ## [Unreleased]
 
+## 0.0.9
+
+### Fixed
+- Fixed a `NullPointerException` caused by stale editor listeners accessing project settings after plugin reloads.
+- Ensured editor, caret, and document listeners are disposed with the project service lifecycle.
+
+### Changed
+- Updated the Gradle wrapper and GitHub Actions Java setup used by the release workflow.
+
 ## 0.0.8
 
 ### Changed
